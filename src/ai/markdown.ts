@@ -176,7 +176,8 @@ export interface MdResult {
 }
 
 export function markdownToHtml(md: string): MdResult {
-  const { meta, body } = parseFrontMatter(md);
+  // Windows 메모장 등에서 저장한 글(CRLF 줄바꿈, BOM)도 같게 읽도록 먼저 정리
+  const { meta, body } = parseFrontMatter(md.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'));
   const warnings = new Set<string>();
   const page = pageFromMeta(meta);
   const contentPx = (contentWidthMm(page) * 96) / 25.4;

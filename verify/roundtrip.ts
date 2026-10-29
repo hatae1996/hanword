@@ -83,6 +83,10 @@ for (const [name, json] of Object.entries(SAMPLES)) {
   same('AI 보고서: 마크다운 → 한글 저장 → 열기', doc, (await readHwpx(await docToHwpx(doc))).doc);
   same('AI 보고서: 마크다운 → Word 저장 → 열기', doc, (await readDocx(await docToDocx(doc))).doc);
   same('AI 보고서: 문서 → 마크다운 → 문서', doc, markdownToDoc(docToMarkdown(doc), nodeGenerateJSON).doc);
+  // Windows 메모장 형식(CRLF 줄바꿈 + BOM)으로 저장된 글도 똑같이 읽혀야 한다
+  const crlf = markdownToDoc('\uFEFF' + md.replace(/\r?\n/g, '\r\n'), nodeGenerateJSON);
+  ok('AI 보고서: Windows 줄바꿈(CRLF·BOM)도 경고 없음', crlf.warnings.length === 0, crlf.warnings.join(', '));
+  same('AI 보고서: Windows 줄바꿈(CRLF·BOM)도 같은 문서', doc, crlf.doc);
 }
 
 // ── 다른 프로그램이 만든 파일 ──────────────────────────────

@@ -7,6 +7,19 @@ on:
   pull_request:
 
 jobs:
+  # 배포는 Windows 에서 하므로 Windows 에서도 같은 테스트를 돌린다 (줄바꿈 차이 등)
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc
+      - run: npm run roundtrip
+
   test:
     runs-on: ubuntu-latest
     steps:
