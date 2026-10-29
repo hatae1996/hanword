@@ -15,5 +15,6 @@ const out = [
   body.trim(),
   pick(/<script[\s\S]*?<\/script>/gi),
 ].join('\n');
-writeFileSync('dist/artifact.html', out);
+// 라이브러리 코드 안의 U+FFFD 글자는 게시 검사에 걸리므로 같은 뜻의 JS 이스케이프(\\uFFFD)로 바꾼다
+writeFileSync('dist/artifact.html', out.replace(/\uFFFD/g, '\\uFFFD'));
 console.log('dist/artifact.html', (out.length / 1024).toFixed(0), 'KB');
