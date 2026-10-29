@@ -14,6 +14,7 @@ import { readDocx } from './import/docx';
 import { readHwpx } from './import/hwpx';
 import { ParagraphFormat } from './editor/paragraphFormat';
 import { FontSizeStep, stepFontSize } from './editor/fontSizeStep';
+import { setupZoom } from './editor/zoom';
 import { safeFileName } from './save';
 import {
   askSavePath, baseName, confirmDialog, download, extOf, isDesktop, pickFile, readPath, setWindowTitle, wireDesktop, writePath,
@@ -195,11 +196,25 @@ function applyPage(p: PageSetup) {
   page.style.minHeight = `${p.heightMm}mm`;
   page.style.padding = `${p.marginTopMm + p.headerMm}mm ${p.marginRightMm}mm ${p.marginBottomMm + p.footerMm}mm ${p.marginLeftMm}mm`;
   const r = $('ruler');
-  r.style.width = `${p.widthMm}mm`;
+  r.style.width = `${p.widthMm * (zoomCtl?.get() ?? 1)}mm`;
   const f = (n: number) => String(Math.round(n * 10) / 10);
   const paper = Math.round(p.widthMm) === 210 && Math.round(p.heightMm) === 297 ? 'A4' : Math.round(p.widthMm) === 297 && Math.round(p.heightMm) === 210 ? 'A4 가로' : '용지';
   r.textContent = `${paper} · ${f(p.widthMm)} × ${f(p.heightMm)} mm · 여백 위 ${f(p.marginTopMm)}(+머리말 ${f(p.headerMm)}) · 좌 ${f(p.marginLeftMm)} · 우 ${f(p.marginRightMm)} · 아래 ${f(p.marginBottomMm)}(+꼬리말 ${f(p.footerMm)})`;
 }
+// ── 화면 확대/축소 (Ctrl+휠) ─────────────────────────────
+let zoomCtl: ReturnType<typeof setupZoom> | undefined;
+zoomCtl = setupZoom({
+  desk: $('desk'),
+  page: $('page'),
+  onChange: (z) => {
+    $('zoom-reset').textContent = `${Math.round(z * 100)}%`;
+    $('ruler').style.width = `${state.page.widthMm * z}mm`;
+  },
+});
+$('zoom-in').addEventListener('click', () => zoomCtl!.step(1));
+$('zoom-out').addEventListener('click', () => zoomCtl!.step(-1));
+$('zoom-reset').addEventListener('click', () => zoomCtl!.set(1));
+
 applyPage(state.page);
 updateTitle();
 
