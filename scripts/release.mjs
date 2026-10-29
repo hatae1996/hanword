@@ -2,8 +2,9 @@
 //
 // 1) package.json · tauri.conf.json · Cargo.toml 의 버전을 한꺼번에 바꾸고
 // 2) CHANGELOG.md 맨 위에 변경 내용을 적고
-// 3) 커밋 + 태그(v0.3.1)를 만든다.
-// 그다음 `git push --follow-tags` 하면 GitHub 가 설치 파일을 만들어 배포하고, 사용자 앱이 자동 업데이트된다.
+// 3) 커밋한다.
+// 그다음 git push 하고, GitHub Actions 탭의 "배포" → "Run workflow" 를 누르면
+// 태그·설치 파일·릴리스가 만들어지고 사용자 앱이 자동 업데이트된다.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
@@ -40,5 +41,4 @@ writeFileSync('CHANGELOG.md', `# 변경 기록\n\n## v${version} (${date})\n\n- 
 const run = (cmd) => execSync(cmd, { stdio: 'inherit' });
 run('git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml CHANGELOG.md');
 run(`git commit -m ${JSON.stringify(`v${version}: ${notes}`)}`);
-run(`git tag v${version}`);
-console.log(`\nv${version} 준비 완료. 배포하려면:  git push --follow-tags`);
+console.log(`\nv${version} 준비 완료. git push 후 GitHub Actions → 배포 → Run workflow`);

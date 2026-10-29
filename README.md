@@ -22,11 +22,11 @@ npm run app:dev      # 데스크톱 앱 창으로 실행 (Rust 필요)
 ## 새 버전 배포 (자동 업데이트)
 
 ```bash
-npm run release -- 0.3.1 "바뀐 내용"   # 버전 올리기 + CHANGELOG + 커밋 + 태그
-git push --follow-tags                   # GitHub 가 빌드·서명·배포 → 사용자 앱에 업데이트 알림
+npm run release -- 0.3.1 "바뀐 내용"   # 버전 올리기 + CHANGELOG + 커밋
+git push                                 # 그다음 GitHub Actions → "배포" → Run workflow
 ```
 
-- 배포: `.github/workflows/release.yml` (태그 `v*` 를 올리면 Windows 설치 파일 + `latest.json` 을 GitHub Release 에 게시)
+- 배포: `.github/workflows/release.yml` (Run workflow 를 누르면 버전 태그를 만들고 Windows 설치 파일 + `latest.json` 을 GitHub Release 에 게시)
 - 앱은 켤 때 `releases/latest/download/latest.json` 을 확인하고, "지금 업데이트" 를 누르면 내려받아 설치 후 다시 켜진다
 - 업데이트 파일은 서명된다. 개인 키는 저장소 Secret `TAURI_SIGNING_PRIVATE_KEY` 에만 둔다 (**잃어버리면 기존 설치본에 업데이트를 보낼 수 없으니 따로 백업**)
 - 평소 커밋은 `.github/workflows/ci.yml` 이 타입 검사·왕복 테스트·구조 검증을 돌린다

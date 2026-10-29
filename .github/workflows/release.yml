@@ -1,16 +1,18 @@
-# 새 버전 배포 — "v0.3.1" 같은 태그를 올리면 실행된다 (npm run release 가 태그를 만든다)
-#  1) 테스트 (저장→열기 왕복)
+# 새 버전 배포 — GitHub 의 Actions 탭 → "배포" → "Run workflow" 버튼으로 실행
+#  1) 테스트 (타입 검사 · 저장→열기 왕복)
 #  2) Windows 설치 파일 빌드 + 업데이트 서명
-#  3) GitHub Release 게시 + latest.json 갱신 → 사용자 앱이 켜질 때 자동으로 업데이트 알림
+#  3) package.json 버전으로 태그(v0.3.0 등)와 GitHub Release 를 만들고 latest.json 갱신
+#     → 사용자 앱이 켜질 때 업데이트 알림
 #
-# 필요한 저장소 Secret (Settings → Secrets and variables → Actions):
-#   TAURI_SIGNING_PRIVATE_KEY  — 업데이트 서명용 개인 키 (잃어버리면 기존 설치본에 업데이트를 보낼 수 없음)
+# 필요한 저장소 Secret: TAURI_SIGNING_PRIVATE_KEY (업데이트 서명용 개인 키)
 name: 배포
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -32,6 +34,15 @@ jobs:
         run: |
           npx tsc
           npm run roundtrip
+      - name: 릴리스 노트 (CHANGELOG 맨 위 항목)
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo 'body<<__END__'
+            awk '/^## /{n++} n==1' CHANGELOG.md | tail -n +2
+            echo '__END__'
+          } >> "$GITHUB_OUTPUT"
       - name: 설치 파일 빌드 · 서명 · 릴리스 게시
         uses: tauri-apps/tauri-action@v0
         env:
@@ -39,9 +50,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'HanWord ${{ github.ref_name }}'
-          releaseBody: ${{ github.event.head_commit.message }}
+          tagName: v__VERSION__
+          releaseName: 'HanWord v__VERSION__'
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
