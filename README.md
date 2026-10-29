@@ -1,0 +1,117 @@
+# HanWord
+
+한컴오피스 **한글(.hwpx)** 과 Microsoft **Word(.docx)** 양쪽에서 서식이 깨지지 않고 열리는 문서 편집기.
+
+```
+편집기(TipTap) ──▶ 공통 문서 모델(Doc) ──┬──▶ HWPX 저장기 (한글이 만든 빈 문서 템플릿 위에 채움)
+                                          └──▶ DOCX 저장기 (docx 라이브러리)
+```
+
+포맷끼리 직접 변환하지 않고, 가운데의 **공통 문서 모델**(`src/model/types.ts`)을 거친다.
+글자 크기·여백·줄 간격 등 모든 수치는 `src/model/resolve.ts` 와 `src/model/units.ts` 한 곳에서 계산하므로
+두 저장기가 서로 다른 값을 쓸 수 없다.
+
+## 실행
+
+```bash
+npm install
+npm run dev          # 브라우저에서 편집기 실행 (http://localhost:5173)
+npm run app:dev      # 데스크톱 앱 창으로 실행 (Rust 필요)
+```
+
+## 새 버전 배포 (자동 업데이트)
+
+```bash
+npm run release -- 0.3.1 "바뀐 내용"   # 버전 올리기 + CHANGELOG + 커밋 + 태그
+git push --follow-tags                   # GitHub 가 빌드·서명·배포 → 사용자 앱에 업데이트 알림
+```
+
+- 배포: `.github/workflows/release.yml` (태그 `v*` 를 올리면 Windows 설치 파일 + `latest.json` 을 GitHub Release 에 게시)
+- 앱은 켤 때 `releases/latest/download/latest.json` 을 확인하고, "지금 업데이트" 를 누르면 내려받아 설치 후 다시 켜진다
+- 업데이트 파일은 서명된다. 개인 키는 저장소 Secret `TAURI_SIGNING_PRIVATE_KEY` 에만 둔다 (**잃어버리면 기존 설치본에 업데이트를 보낼 수 없으니 따로 백업**)
+- 평소 커밋은 `.github/workflows/ci.yml` 이 타입 검사·왕복 테스트·구조 검증을 돌린다
+
+## Windows 설치 파일 만들기
+
+세 가지 방법 중 하나를 쓴다. 결과물은 `HanWord_0.2.0_x64-setup.exe` 한 개다.
+
+1. **내 PC에서** — `설치파일-만들기.cmd` 더블클릭. 처음엔 Rust·Visual Studio C++ 빌드 도구를 자동 설치하느라 20~40분, 이후엔 몇 분.
+2. **GitHub 에서 자동으로** — 위의 "새 버전 배포" 참고.
+3. **리눅스에서 교차 빌드** — `scripts/cross-build-windows.sh` (MinGW + NSIS, 개발자용)
+
+데스크톱 앱에서만 되는 것: Windows 파일 대화상자, 연 파일에 바로 저장(Ctrl+S), 창 제목에 파일 이름·수정 표시,
+저장 안 하고 닫을 때 경고, 파일을 창에 끌어다 놓아 열기, 탐색기 "연결 프로그램 → HanWord".
+저장은 임시 파일에 쓴 뒤 바꿔치기하므로 저장 도중 꺼져도 원본이 깨지지 않는다.
+
+## 열기
+
+- `.hwpx` — 한글 문서. 저장기의 역방향 + 한글이 만든 일반 문서
+- `.docx` — Word 문서. 스타일 상속, 번호 목록, 병합 표, "같은 스타일 문단 간격 무시"까지 처리
+- 그림·도형·머리말 등 아직 지원하지 않는 요소는 열 때 알려 주고, **원본에 덮어쓰기 전에 한 번 더 확인**한다
+- 구형 `.hwp`/`.doc` 는 열지 못한다 (한글/Word 에서 hwpx/docx 로 저장 후 열기)
+
+## 검증 — "한글/Word 에서 깨지지 않는가"
+
+```bash
+pip install -r verify/requirements.txt
+npm run verify
+```
+
+| 단계 | 하는 일 |
+|---|---|
+| `npm run roundtrip` | **왕복 테스트**: 저장→열기, 형식 바꿔 저장→열기, 편집기 거쳐 저장 — 결과가 원본과 한 글자·한 서식도 다르지 않은지 |
+| `npm run samples` | `verify/samples.ts` 의 샘플(서식·표·긴 문서)을 실제 저장기로 `verify/out/` 에 HWPX·DOCX 로 만든다 |
+| `verify/verify.py` | HWPX: ZIP 구조, OWPML 스키마, 한글 열기 차단 이슈, ID 참조 무결성, 글자 누락 / DOCX: 열림, 글자 누락, LibreOffice 렌더링(PDF·PNG) |
+| `npm run render:hwpx` | 독립 렌더러 rhwp 로 HWPX 를 SVG 로 그려 한글 없이 레이아웃 확인 |
+| `verify/windows/verify-in-office.ps1` | **Windows 에서 실제 한글·Word 로** 열어 글자 비교, 쪽 수 비교, 각 프로그램이 그린 PDF 저장 |
+
+최종 판정은 마지막 Windows 스크립트다. 새 기능을 넣을 때마다 샘플을 추가하고 이 스크립트까지 돌린다.
+
+```powershell
+npm run samples
+powershell -ExecutionPolicy Bypass -File verify\windows\verify-in-office.ps1
+```
+
+## 호환성을 위해 지키는 규칙
+
+**편집기에는 양쪽에서 1:1 로 표현되는 기능만 둔다.** 현재: 글꼴, 크기, 굵게·기울임·밑줄·취소선, 글자색, 정렬, 제목 1–3, 목록, 표(가로·세로 병합, 열 너비), 문단 안 줄바꿈.
+
+| 항목 | 한글(HWPX) | Word(DOCX) | 처리 |
+|---|---|---|---|
+| 단위 | HWPUNIT(1/7200in), 글자 pt×100 | twip(1/1440in), 반 포인트 | `units.ts` 에서만 변환 |
+| 쪽 여백 | 본문 시작 = 위 여백 + 머리말 | `top` = 본문까지 거리 | Word top = 한글 top + header |
+| 줄 간격 | 글자 크기 × 160% | 배수는 글꼴 자체 줄 높이 기준 | Word 에 "최소" 규칙으로 (최대 글자 크기 × %) 기록 |
+| 문단 여백 | `hp:case` 와 `hp:default`(값 2배) 두 곳 | 한 곳 | 두 곳 모두 기록 |
+| 양쪽 정렬 + Shift+Enter | 줄을 늘리지 않음 | 줄을 양끝으로 늘림 | Word 에 `doNotExpandShiftReturn` |
+| 표 | 고정 열 너비, 셀 세로 가운데 | 자동 맞춤이 기본 | Word 표를 `fixed` 레이아웃·가운데 정렬로 |
+| 글꼴 | 함초롬체 기본 | 맑은 고딕 기본 | 기본 맑은 고딕, 함초롬체는 "(한글 전용)" 표시 |
+| 빈 문단 높이 | 문단 글자모양 기준 | 문단 기호 서식 기준 | 둘 다 같은 글자모양 지정 |
+
+HWPX 는 XML 을 처음부터 만들지 않는다. **한글이 직접 저장한 빈 문서**(`templates/blank.hwpx`)를 열어
+`header.xml` 에는 글꼴·글자모양·문단모양·테두리를 *추가만* 하고, `section0.xml` 에는 한글이 만든 구역 설정을 그대로 둔 채 본문만 채운다.
+
+## 구조
+
+```
+src/
+  model/      공통 문서 모델 · 기본값 · 단위 변환 · 실효 서식 · 표 격자 계산 · TipTap 변환
+  export/     hwpx.ts, docx.ts, templates.generated.ts (npm run embed 가 생성)
+  import/     hwpx.ts, docx.ts (열기), xml.ts
+  editor/     편집기 확장 (문단 들여쓰기·간격)
+  main.ts     편집기 UI      platform.ts  데스크톱/브라우저별 파일 처리
+src-tauri/    데스크톱 앱 (Rust: 파일 읽기/쓰기만)
+templates/    blank.hwpx (한글이 저장한 빈 문서)
+verify/       샘플, 검증 스크립트, Windows 실제 프로그램 검증
+```
+
+## 아직 하지 않은 것 (로드맵)
+
+1. **보정 (지금 바로)** — Windows 스크립트로 샘플 20종을 비교해 쪽 수가 다르면 `LINE_CALIBRATION` 조정. Word 의 한글 줄나눔(어절/글자 단위)이 한글과 같은지도 확인
+2. **무손실 저장** — 지원하지 않는 요소(그림 등)를 원본 XML 그대로 보관했다가 다시 쓰기
+3. 기능 추가 (각각 HWPX·DOCX 짝을 확정한 뒤): 자동 번호 목록, 그림, 머리말/꼬리말·쪽 번호, 쪽 나누기, 표 속 표
+4. **구형 .hwp 열기** — rhwp 또는 hwpjs 로 읽기
+5. 자동 업데이트, 최근 문서 목록, 코드 서명(설치 시 Windows 경고 없애기)
+
+## 라이선스
+
+MIT. `templates/blank.hwpx` 는 [python-hwpx](https://github.com/airmang/python-hwpx)(Apache-2.0)에서 가져왔다 — `templates/NOTICE-python-hwpx` 참고.

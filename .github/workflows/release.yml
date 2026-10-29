@@ -1,0 +1,48 @@
+# 새 버전 배포 — "v0.3.1" 같은 태그를 올리면 실행된다 (npm run release 가 태그를 만든다)
+#  1) 테스트 (저장→열기 왕복)
+#  2) Windows 설치 파일 빌드 + 업데이트 서명
+#  3) GitHub Release 게시 + latest.json 갱신 → 사용자 앱이 켜질 때 자동으로 업데이트 알림
+#
+# 필요한 저장소 Secret (Settings → Secrets and variables → Actions):
+#   TAURI_SIGNING_PRIVATE_KEY  — 업데이트 서명용 개인 키 (잃어버리면 기존 설치본에 업데이트를 보낼 수 없음)
+name: 배포
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - name: 타입 검사 · 왕복 테스트
+        run: |
+          npx tsc
+          npm run roundtrip
+      - name: 설치 파일 빌드 · 서명 · 릴리스 게시
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'HanWord ${{ github.ref_name }}'
+          releaseBody: ${{ github.event.head_commit.message }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --bundles nsis

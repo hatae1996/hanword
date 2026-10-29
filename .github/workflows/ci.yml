@@ -1,0 +1,26 @@
+# 평소 올릴 때마다 빠르게 검사 (설치 파일은 만들지 않음)
+name: 검사
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc
+      - run: npm run samples
+      - run: npm run roundtrip
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r verify/requirements.txt
+      - run: python verify/verify.py

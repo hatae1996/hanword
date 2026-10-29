@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "HanWord 메인 창 권한: 창 제목, 닫기 확인, 파일 대화상자, 자동 업데이트",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-title",
+    "core:window:allow-destroy",
+    "dialog:default",
+    "updater:default",
+    "process:allow-restart"
+  ]
+}

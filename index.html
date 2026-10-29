@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>HanWord</title>
+    <meta name="claude:viewport-fit-sides" content="cover" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand" aria-label="HanWord">
+          <span class="brand-mark" aria-hidden="true">한<span>W</span></span>
+        </div>
+        <label class="doc-title">
+          <span class="sr-only">문서 제목</span>
+          <input id="doc-title" type="text" value="" placeholder="문서 제목" spellcheck="false" />
+        </label>
+        <div class="file-actions">
+          <button id="new-doc" class="btn ghost" type="button" title="새 문서 (Ctrl+N)">새 문서</button>
+          <button id="open-doc" class="btn ghost" type="button" title="한글(.hwpx)·Word(.docx) 문서 열기 (Ctrl+O)">열기</button>
+          <button id="save-doc" class="btn ghost" type="button" title="저장 (Ctrl+S)">저장</button>
+          <button id="save-hwpx" class="btn save hwp" type="button" title="한컴오피스 한글에서 여는 파일로 저장">
+            <span class="fmt">HWPX</span> 한글로 저장
+          </button>
+          <button id="save-docx" class="btn save word" type="button" title="Microsoft Word 에서 여는 파일로 저장">
+            <span class="fmt">DOCX</span> Word로 저장
+          </button>
+        </div>
+      </header>
+
+      <div class="ribbon" role="toolbar" aria-label="서식">
+        <div class="group">
+          <button class="tb" data-cmd="undo" title="실행 취소 (Ctrl+Z)" aria-label="실행 취소">↶</button>
+          <button class="tb" data-cmd="redo" title="다시 실행 (Ctrl+Y)" aria-label="다시 실행">↷</button>
+        </div>
+        <div class="group">
+          <select id="block-type" class="sel" title="문단 종류" aria-label="문단 종류">
+            <option value="p">본문</option>
+            <option value="1">제목 1</option>
+            <option value="2">제목 2</option>
+            <option value="3">제목 3</option>
+          </select>
+          <select id="font-family" class="sel" title="글꼴" aria-label="글꼴"></select>
+          <select id="font-size" class="sel narrow" title="글자 크기 (pt)" aria-label="글자 크기"></select>
+          <button class="tb" data-cmd="size-down" title="글자 작게 (Ctrl+[)" aria-label="글자 작게">가<sub class="step">−</sub></button>
+          <button class="tb" data-cmd="size-up" title="글자 크게 (Ctrl+])" aria-label="글자 크게">가<sup class="step">+</sup></button>
+        </div>
+        <div class="group">
+          <button class="tb b" data-cmd="bold" title="굵게 (Ctrl+B)" aria-label="굵게">가</button>
+          <button class="tb i" data-cmd="italic" title="기울임 (Ctrl+I)" aria-label="기울임">가</button>
+          <button class="tb u" data-cmd="underline" title="밑줄 (Ctrl+U)" aria-label="밑줄">가</button>
+          <button class="tb s" data-cmd="strike" title="취소선" aria-label="취소선">가</button>
+          <label class="tb color" title="글자 색" aria-label="글자 색">
+            <span class="swatch" id="color-swatch">가</span>
+            <input id="font-color" type="color" value="#000000" />
+          </label>
+        </div>
+        <div class="group">
+          <button class="tb" data-cmd="align-left" title="왼쪽 정렬" aria-label="왼쪽 정렬"><i class="ico al"></i></button>
+          <button class="tb" data-cmd="align-center" title="가운데 정렬" aria-label="가운데 정렬"><i class="ico ac"></i></button>
+          <button class="tb" data-cmd="align-right" title="오른쪽 정렬" aria-label="오른쪽 정렬"><i class="ico ar"></i></button>
+          <button class="tb" data-cmd="align-justify" title="양쪽 정렬" aria-label="양쪽 정렬"><i class="ico aj"></i></button>
+        </div>
+        <div class="group">
+          <button class="tb wide" data-cmd="bullet" title="글머리표" aria-label="글머리표">• 목록</button>
+          <button class="tb wide" data-cmd="ordered" title="번호 목록" aria-label="번호 목록">1. 목록</button>
+        </div>
+        <div class="group">
+          <button class="tb wide" data-cmd="table" title="3×3 표 넣기">표 넣기</button>
+          <div class="table-tools" id="table-tools" hidden>
+            <button class="tb wide" data-cmd="row-after" title="아래에 줄 추가">줄+</button>
+            <button class="tb wide" data-cmd="col-after" title="오른쪽에 칸 추가">칸+</button>
+            <button class="tb wide" data-cmd="merge" title="선택한 셀 합치기">셀 합치기</button>
+            <button class="tb wide" data-cmd="split" title="셀 나누기">나누기</button>
+            <button class="tb wide" data-cmd="row-del" title="줄 지우기">줄−</button>
+            <button class="tb wide" data-cmd="col-del" title="칸 지우기">칸−</button>
+            <button class="tb wide danger" data-cmd="table-del" title="표 지우기">표 지우기</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="update-bar" id="update-bar" role="status" hidden>
+        <span id="update-text"></span>
+        <button id="update-now" class="btn save" type="button">지금 업데이트</button>
+        <button id="update-later" class="btn ghost" type="button">나중에</button>
+      </div>
+
+      <main class="desk" id="desk">
+        <div class="ruler" id="ruler" aria-hidden="true"></div>
+        <article class="page" id="page"><div id="editor"></div></article>
+      </main>
+
+      <footer class="statusbar">
+        <span id="stat-file">새 문서</span>
+        <span class="dot" aria-hidden="true">·</span>
+        <span id="stat-chars">0자</span>
+        <span class="dot" aria-hidden="true">·</span>
+        <span class="note">한글·Word 양쪽에서 똑같이 표현되는 기능만 제공합니다</span>
+        <span class="toast" id="toast" role="status" aria-live="polite"></span>
+        <button class="version" id="app-version" type="button" title="업데이트 확인"></button>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

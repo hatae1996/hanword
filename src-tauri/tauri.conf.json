@@ -1,0 +1,72 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "HanWord",
+  "version": "0.3.0",
+  "identifier": "kr.hanword.editor",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "HanWord",
+        "width": 1280,
+        "height": 880,
+        "minWidth": 760,
+        "minHeight": 520,
+        "center": true,
+        "resizable": true,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "HanWord",
+    "copyright": "© 2026 HanWord",
+    "category": "Productivity",
+    "shortDescription": "한글·Word 호환 문서 편집기",
+    "longDescription": "한컴오피스 한글(.hwpx)과 Microsoft Word(.docx) 양쪽에서 서식이 깨지지 않고 열리는 문서 편집기",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "languages": [
+          "Korean"
+        ],
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE2QzZCMUVFNjkxOThBOUYKUldTZmlobHA3ckhHcGswQkQyYUwvYmQvejkyNUhheXlwM2RMc01OeFZlbDlJS2xrcTl0cXN4eUsK",
+      "endpoints": [
+        "https://github.com/hatae1996/hanword/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

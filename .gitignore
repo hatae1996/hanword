@@ -1,0 +1,8 @@
+node_modules/
+dist/
+verify/out/
+__pycache__/
+*.log
+src-tauri/target/
+src-tauri/target-win/
+src-tauri/gen/
