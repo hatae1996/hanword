@@ -1,9 +1,5 @@
 import './style.css';
 import { Editor } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import { Color, FontFamily, FontSize, TextStyle } from '@tiptap/extension-text-style';
-import TextAlign from '@tiptap/extension-text-align';
-import { TableKit } from '@tiptap/extension-table';
 import { ALL_FONTS, DEFAULT_FONT, DEFAULT_PAGE, DEFAULT_SIZE_PT, HANCOM_ONLY_FONTS } from './model/defaults';
 import type { PageSetup } from './model/types';
 import { tiptapToDoc } from './model/fromTiptap';
@@ -12,9 +8,12 @@ import { docToDocx } from './export/docx';
 import { docToHwpx } from './export/hwpx';
 import { readDocx } from './import/docx';
 import { readHwpx } from './import/hwpx';
-import { ParagraphFormat } from './editor/paragraphFormat';
+import { schemaExtensions } from './editor/extensions';
 import { FontSizeStep, stepFontSize } from './editor/fontSizeStep';
 import { setupZoom } from './editor/zoom';
+import { MarkdownPaste } from './editor/markdownPaste';
+import { markdownToDoc } from './ai/markdown';
+import { generateJSON } from '@tiptap/html';
 import { safeFileName } from './save';
 import {
   askSavePath, baseName, confirmDialog, download, extOf, isDesktop, pickFile, readPath, setWindowTitle, wireDesktop, writePath,
@@ -28,26 +27,16 @@ let loading = false; // 파일을 불러오는 중에는 '수정됨' 으로 표�
 const SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32];
 
 // ── 편집기 ─────────────────────────────────────────────
-// 양쪽 포맷에 1:1 대응이 없는 기능(코드 블록, 인용, 가로줄, 링크)은 끈다.
+// 문서 구조는 editor/extensions.ts (AI 변환기와 공유)
 const editor = new Editor({
   element: $('editor'),
   extensions: [
-    StarterKit.configure({
-      heading: { levels: [1, 2, 3] },
-      codeBlock: false,
-      code: false,
-      blockquote: false,
-      horizontalRule: false,
-      link: false,
-    }),
-    TextStyle,
-    Color,
-    FontFamily,
-    FontSize,
-    TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
-    TableKit.configure({ table: { resizable: true, cellMinWidth: 30 } }),
-    ParagraphFormat,
+    ...schemaExtensions({ resizableTables: true }),
     FontSizeStep,
+    MarkdownPaste.configure({
+      onConverted: (w) =>
+        toast(`AI 글(마크다운)을 서식으로 바꿔 붙여넣었습니다${w.length ? ` · 빠진 요소: ${w.join(', ')}` : ''} — 글자 그대로는 Ctrl+Shift+V`),
+    }),
   ],
   // 브라우저 데모는 예시 문서로, 데스크톱 앱은 빈 문서로 시작
   content: isDesktop ? '<p></p>' : SAMPLE_HTML,
@@ -294,9 +283,14 @@ async function loadFile(file: OpenedFile) {
   const ext = extOf(file.name);
   if (ext === 'hwp') return toast('구형 .hwp 파일은 아직 열 수 없습니다. 한글에서 "다른 이름으로 저장 → HWPX"로 저장한 뒤 여세요.', true);
   if (ext === 'doc') return toast('구형 .doc 파일은 열 수 없습니다. Word 에서 .docx 로 저장한 뒤 여세요.', true);
-  if (ext !== 'hwpx' && ext !== 'docx') return toast('한글(.hwpx) 또는 Word(.docx) 파일만 열 수 있습니다.', true);
+  if (ext !== 'hwpx' && ext !== 'docx' && ext !== 'md') return toast('한글(.hwpx), Word(.docx), 마크다운(.md) 파일만 열 수 있습니다.', true);
   const title = file.name.replace(/\.[^.]+$/, '');
-  const { doc, warnings } = ext === 'hwpx' ? await readHwpx(file.bytes, title) : await readDocx(file.bytes, title);
+  const { doc, warnings } =
+    ext === 'hwpx'
+      ? await readHwpx(file.bytes, title)
+      : ext === 'docx'
+        ? await readDocx(file.bytes, title)
+        : markdownToDoc(new TextDecoder().decode(file.bytes), (html) => generateJSON(html, schemaExtensions()) as any, title);
   loading = true;
   try {
     editor.commands.setContent(docToTiptap(doc) as any);
@@ -304,12 +298,21 @@ async function loadFile(file: OpenedFile) {
     loading = false;
   }
   editor.commands.focus('start');
-  Object.assign(state, { path: file.path, fileName: file.name, format: ext as Format, page: doc.page, dropped: warnings });
-  titleInput.value = title;
+  // 마크다운은 "가져오기" — 저장할 때 한글/Word 형식을 고른다 (원본 .md 를 덮어쓰지 않음)
+  const imported = ext === 'md';
+  Object.assign(state, {
+    path: imported ? undefined : file.path,
+    fileName: file.name,
+    format: imported ? undefined : (ext as Format),
+    page: doc.page,
+    dropped: imported ? [] : warnings,
+  });
+  titleInput.value = doc.title || title;
   applyPage(doc.page);
-  markDirty(false);
+  markDirty(imported);
   refresh();
-  toast(warnings.length ? `${file.name} 열림 · 아직 지원하지 않아 빠진 요소: ${warnings.join(', ')}` : `${file.name} 열림`, warnings.length > 0);
+  if (imported) toast(`${file.name} 을(를) 가져왔습니다 — 한글로 저장 / Word로 저장 을 누르세요${warnings.length ? ` · 빠진 요소: ${warnings.join(', ')}` : ''}`);
+  else toast(warnings.length ? `${file.name} 열림 · 아직 지원하지 않아 빠진 요소: ${warnings.join(', ')}` : `${file.name} 열림`, warnings.length > 0);
 }
 
 async function openDialog() {

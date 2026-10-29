@@ -425,5 +425,8 @@ export async function readDocx(bytes: Uint8Array | ArrayBuffer, title = '문서'
   if (!blocks.length || blocks[blocks.length - 1].type === 'table') {
     blocks.push(cleanParagraph({ type: 'paragraph', role: 'body', style: defaultParaStyle(), inlines: [] }));
   }
-  return { doc: { title, page, blocks } as Doc, warnings: [...r.warnings] };
+  const core = zip.file('docProps/core.xml');
+  const savedTitle = core ? (await core.async('string')).match(/<dc:title>([^<]+)<\/dc:title>/)?.[1]?.trim() : undefined;
+  const unescape = (t: string) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  return { doc: { title: savedTitle ? unescape(savedTitle) : title, page, blocks } as Doc, warnings: [...r.warnings] };
 }

@@ -81,7 +81,8 @@ export function canonical(doc: Doc): string {
   const para = (p: Paragraph) => ({
     role: p.role,
     style: { ...p.style, indentLeftMm: r1(p.style.indentLeftMm), firstLineMm: r1(p.style.firstLineMm) },
-    inlines: mergeInlines(p.inlines.map((i) => (i.kind === 'text' ? cleanRun(p, i) : i))),
+    // 줄바꿈 없는 공백(U+00A0)은 화면에서 일반 공백과 같다
+    inlines: mergeInlines(p.inlines.map((i) => (i.kind === 'text' ? cleanRun(p, { ...i, text: i.text.replace(/\u00A0/g, ' ') }) : i))),
   });
   const cell = (c: TableCell) => ({ colspan: c.colspan, rowspan: c.rowspan, blocks: c.blocks.map(para) });
   const block = (b: Block) =>

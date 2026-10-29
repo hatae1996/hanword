@@ -57,3 +57,10 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: --bundles nsis
+      - name: AI 용 변환기(hanword.mjs)도 릴리스에 올리기
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run build:cli
+          gh release upload "v$(node -p "require('./package.json').version")" cli/hanword.mjs --clobber

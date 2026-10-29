@@ -21,6 +21,8 @@ import { readHwpx } from '../src/import/hwpx';
 import { readDocx } from '../src/import/docx';
 import type { Doc } from '../src/model/types';
 import { SAMPLES } from './samples';
+import { docToMarkdown, markdownToDoc } from '../src/ai/markdown';
+import { nodeGenerateJSON } from '../src/ai/node';
 
 (globalThis as any).DOMParser = DOMParser;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -61,6 +63,26 @@ for (const [name, json] of Object.entries(SAMPLES)) {
   same(`${name}: DOCX 로 연 문서 → HWPX 저장 → 열기`, d0, (await readHwpx(await docToHwpx(x.doc))).doc);
 
   same(`${name}: 연 문서 → 편집기 → 저장용 문서`, d0, tiptapToDoc(docToTiptap(h.doc) as any, name, h.doc.page));
+
+  // AI 연동: 문서 → 마크다운 → 문서 (AI 가 한글 문서를 읽고 다시 쓰는 경로)
+  same(`${name}: 문서 → 마크다운 → 문서`, d0, markdownToDoc(docToMarkdown(d0), nodeGenerateJSON).doc);
+}
+
+// ── AI 가 쓴 마크다운 ─────────────────────────────────────
+{
+  const md = readFileSync(join(here, 'fixtures', 'ai-보고서.md'), 'utf8');
+  const { doc, warnings } = markdownToDoc(md, nodeGenerateJSON);
+  ok('AI 보고서: 변환 경고 없음', warnings.length === 0, warnings.join(', '));
+  const runs = doc.blocks.flatMap((b) => (b.type === 'paragraph' ? b.inlines : []));
+  ok('AI 보고서: 조사가 붙은 굵게(**한글(HWPX)**과) 적용', runs.some((r) => r.kind === 'text' && r.text === '한글(HWPX)' && r.bold));
+  ok('AI 보고서: 색 글자 적용', runs.some((r) => r.kind === 'text' && r.text === '0건' && r.color === '#C00000'));
+  const gaejo = doc.blocks.filter((b) => b.type === 'paragraph' && /^[□○◦※]/.test(b.inlines.map((i) => (i.kind === 'text' ? i.text : '')).join('')));
+  ok('AI 보고서: 개조식 7줄 단계별 들여쓰기', gaejo.length === 7 && gaejo.every((p) => p.type === 'paragraph' && p.style.firstLineMm === -5), `${gaejo.length}줄`);
+  const tables = doc.blocks.filter((b) => b.type === 'table');
+  ok('AI 보고서: 표 2개 (병합 포함)', tables.length === 2 && tables[1].type === 'table' && tables[1].rows[1][0].rowspan === 2 && tables[1].rows[3][1].colspan === 2);
+  same('AI 보고서: 마크다운 → 한글 저장 → 열기', doc, (await readHwpx(await docToHwpx(doc))).doc);
+  same('AI 보고서: 마크다운 → Word 저장 → 열기', doc, (await readDocx(await docToDocx(doc))).doc);
+  same('AI 보고서: 문서 → 마크다운 → 문서', doc, markdownToDoc(docToMarkdown(doc), nodeGenerateJSON).doc);
 }
 
 // ── 다른 프로그램이 만든 파일 ──────────────────────────────

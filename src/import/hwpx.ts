@@ -272,5 +272,9 @@ export async function readHwpx(bytes: Uint8Array | ArrayBuffer, title = '문서'
   if (!blocks.length || blocks[blocks.length - 1].type === 'table') {
     blocks.push(cleanParagraph({ type: 'paragraph', role: 'body', style: defaultParaStyle(), inlines: [] }));
   }
-  return { doc: { title, page, blocks }, warnings: [...r.warnings] };
+  // 문서 안에 저장된 제목이 있으면 그것을 쓴다 (없으면 파일 이름)
+  const hpf = zip.file('Contents/content.hpf');
+  const savedTitle = hpf ? (await hpf.async('string')).match(/<opf:title>([^<]+)<\/opf:title>/)?.[1]?.trim() : undefined;
+  const unescape = (t: string) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  return { doc: { title: savedTitle ? unescape(savedTitle) : title, page, blocks }, warnings: [...r.warnings] };
 }

@@ -11,6 +11,20 @@
 글자 크기·여백·줄 간격 등 모든 수치는 `src/model/resolve.ts` 와 `src/model/units.ts` 한 곳에서 계산하므로
 두 저장기가 서로 다른 값을 쓸 수 없다.
 
+## AI 로 한글 문서 쓰기
+
+AI 가 마크다운으로 쓴 글을 HanWord 가 한글(.hwpx)·Word(.docx)로 바꾼다. 반대로 한글/Word 문서를 마크다운으로 바꿔 AI 가 읽고 고칠 수 있다.
+
+- **앱에서**: ChatGPT·Claude 답변을 복사해 붙여넣으면 제목·굵게·표·개조식이 서식으로 바뀐다 (글자 그대로는 Ctrl+Shift+V). `.md` 파일도 열린다.
+- **AI 가 직접**: 파일 하나짜리 변환기 `cli/hanword.mjs` (릴리스에도 첨부)
+  ```bash
+  node hanword.mjs 보고서.md            # → 보고서.hwpx
+  node hanword.mjs 보고서.md --both     # → .hwpx + .docx
+  node hanword.mjs 받은문서.hwpx        # → 받은문서.md
+  ```
+- 작성 문법·공문 관례: [docs/AI-작성-가이드.md](docs/AI-작성-가이드.md) — 개조식(□ ○ ◦ ·), 병합 표, 색·크기, 문서 설정
+- 변환 규칙은 앱 편집기와 같은 코드(`src/ai/markdown.ts`, `src/editor/extensions.ts`)를 쓴다
+
 ## 실행
 
 ```bash
@@ -97,9 +111,12 @@ src/
   model/      공통 문서 모델 · 기본값 · 단위 변환 · 실효 서식 · 표 격자 계산 · TipTap 변환
   export/     hwpx.ts, docx.ts, templates.generated.ts (npm run embed 가 생성)
   import/     hwpx.ts, docx.ts (열기), xml.ts
+  ai/         markdown.ts (마크다운 ↔ 문서), node.ts (명령줄용 연결)
   editor/     편집기 확장 (문단 들여쓰기·간격)
   main.ts     편집기 UI      platform.ts  데스크톱/브라우저별 파일 처리
 src-tauri/    데스크톱 앱 (Rust: 파일 읽기/쓰기만)
+cli/          AI 용 변환기 (hanword-cli.ts → 묶은 파일 hanword.mjs, `npm run build:cli`)
+docs/         AI 작성 가이드
 templates/    blank.hwpx (한글이 저장한 빈 문서)
 verify/       샘플, 검증 스크립트, Windows 실제 프로그램 검증
 ```

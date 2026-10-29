@@ -16,9 +16,10 @@ export const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' 
 
 const FILTERS = {
   open: [
-    { name: '문서 (한글, Word)', extensions: ['hwpx', 'docx'] },
+    { name: '문서 (한글, Word, 마크다운)', extensions: ['hwpx', 'docx', 'md'] },
     { name: '한글 문서', extensions: ['hwpx'] },
     { name: 'Word 문서', extensions: ['docx'] },
+    { name: 'AI 가 쓴 글 (마크다운)', extensions: ['md', 'markdown', 'txt'] },
   ],
   hwpx: [{ name: '한글 문서', extensions: ['hwpx'] }],
   docx: [{ name: 'Word 문서', extensions: ['docx'] }],
@@ -45,7 +46,7 @@ export async function pickFile(): Promise<OpenedFile | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.hwpx,.docx,.hwp,.doc';
+    input.accept = '.hwpx,.docx,.md,.markdown,.hwp,.doc';
     input.onchange = async () => {
       const f = input.files?.[0];
       resolve(f ? { name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) } : null);

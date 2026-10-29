@@ -19,6 +19,11 @@ jobs:
       - run: npx tsc
       - run: npm run samples
       - run: npm run roundtrip
+      - name: AI 변환기 동작 확인
+        run: |
+          npm run build:cli
+          node cli/hanword.mjs verify/fixtures/ai-보고서.md --both
+          node cli/hanword.mjs verify/fixtures/ai-보고서.hwpx -o /tmp/back.md
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
