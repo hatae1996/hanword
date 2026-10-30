@@ -243,3 +243,35 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .sel.border-sel { min-width: 92px; }
 .tb .sp-ico { font-size: 11px; letter-spacing: -0.12em; }
 .tb .sp-ico.wide { letter-spacing: 0.08em; }
+
+/* ── / 메뉴 ── */
+.hw-slash { position: fixed; z-index: 50; width: 300px; max-height: 360px; overflow-y: auto; padding: 6px; box-sizing: border-box;
+  background: var(--chrome); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 28px rgba(20, 30, 45, 0.18); font: 13px var(--font-ui); }
+.hw-slash-group { padding: 6px 8px 4px; font-size: 11px; font-weight: 600; color: var(--ui-muted); letter-spacing: 0.02em; }
+.hw-slash-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; padding: 6px 8px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ui-ink); text-align: left; cursor: pointer; font: inherit; }
+.hw-slash-item .hint { font-size: 11.5px; color: var(--ui-muted); }
+.hw-slash-item.on, .hw-slash-item:hover { background: var(--sel); }
+
+/* ── 대화상자 ── */
+.hw-dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; width: min(440px, calc(100vw - 32px)); background: var(--chrome); color: var(--ui-ink);
+  box-shadow: 0 18px 48px rgba(20, 30, 45, 0.25); font: 13px var(--font-ui); }
+.hw-dialog::backdrop { background: rgba(20, 28, 40, 0.28); }
+.hw-dialog-title { margin: 0; padding: 16px 18px 4px; font-size: 15px; font-weight: 600; }
+.hw-dialog-body { padding: 8px 18px 4px; display: grid; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.hw-dialog-group { margin-top: 6px; font-size: 11.5px; font-weight: 600; color: var(--ui-muted); }
+.hw-dialog-row { display: grid; grid-template-columns: 110px 1fr auto; align-items: center; gap: 8px; }
+.hw-dialog-row.wide { grid-template-columns: 1fr; }
+.hw-dialog-row.check { grid-template-columns: auto 1fr; }
+.hw-dialog-input { height: 30px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--paper-ink); font: 13px var(--font-ui); }
+.hw-dialog-row.check .hw-dialog-input { height: auto; }
+.hw-dialog-suffix { color: var(--ui-muted); }
+.hw-dialog-note { margin: 4px 0 0; color: var(--ui-muted); font-size: 12px; line-height: 1.5; }
+.hw-dialog-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px 16px; }
+.hw-dialog-list { display: grid; gap: 4px; }
+.hw-dialog-item { display: flex; gap: 6px; align-items: stretch; }
+.hw-dialog-pick { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--paper); color: var(--paper-ink); text-align: left; cursor: pointer; font: inherit; }
+.hw-dialog-pick .sub { font-size: 11.5px; color: var(--ui-muted); }
+.hw-dialog-pick:hover, .hw-dialog-pick:focus { border-color: var(--accent); outline: none; }
+.hw-dialog-act { padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ui-ink); cursor: pointer; font: inherit; }

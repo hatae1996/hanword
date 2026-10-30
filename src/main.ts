@@ -18,6 +18,9 @@ import { BORDER_PRESETS, applyBorderPreset } from './editor/cellBorders';
 import { stepLetterSpacing } from './editor/letterSpacing';
 import { FindReplace, clearFind, findState, replaceAll, replaceCurrent, setQuery, step as findStep } from './editor/findReplace';
 import { markdownToDoc } from './ai/markdown';
+import { Gaejo } from './editor/gaejo';
+import { SlashMenu } from './editor/slashMenu';
+import { expandSnippet, openSnippetList, registerSnippet, reportParts, snippetItems } from './editor/parts';
 import { generateJSON } from '@tiptap/html';
 import { safeFileName } from './save';
 import {
@@ -40,6 +43,8 @@ const editor = new Editor({
     FontSizeStep,
     Blanks.configure({ onCount: (n) => queueMicrotask(() => showBlanks(n)) }),
     FindReplace,
+    Gaejo,
+    SlashMenu.configure({ items: () => [...reportParts(), ...snippetItems()] }),
     MarkdownPaste.configure({
       onConverted: (w) =>
         toast(`AI 글(마크다운)을 서식으로 바꿔 붙여넣었습니다${w.length ? ` · 빠진 요소: ${w.join(', ')}` : ''} — 글자 그대로는 Ctrl+Shift+V`),
@@ -95,6 +100,13 @@ const commands: Record<string, () => void> = {
   'cell-nocolor': () => chain().setCellAttribute('backgroundColor', null).run(),
   'spacing-down': () => stepSpacing(-1),
   'spacing-up': () => stepSpacing(1),
+  parts: () => {
+    // 빈 줄이면 그 자리에, 글이 있으면 새 줄을 만들고 / 를 쳐서 부품 메뉴를 연다
+    const { $from } = editor.state.selection;
+    const c = chain();
+    if ($from.parent.textContent.trim()) c.splitBlock();
+    c.insertContent('/').run();
+  },
   sum: () => {
     const r = sumTable(editor);
     toast(r.message, !r.ok);
@@ -379,6 +391,18 @@ $('new-doc').addEventListener('click', () => newDoc());
 
 // ── 단축키 ───────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
+  // 한글 단축키: Alt+I 상용구 (선택 → 등록, 준말 → 펼치기), Ctrl+F3 상용구 목록
+  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === 'KeyI') {
+    e.preventDefault();
+    if (editor.state.selection.empty) expandSnippet(editor, toast);
+    else void registerSnippet(editor, toast);
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'F3') {
+    e.preventDefault();
+    void openSnippetList(editor);
+    return;
+  }
   // 한글 단축키: Alt+V 다른 이름으로 저장
   if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'KeyV' || e.key.toLowerCase() === 'v')) {
     e.preventDefault();
