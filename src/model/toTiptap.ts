@@ -2,6 +2,7 @@
  * 공통 문서 모델(Doc) → TipTap JSON  (파일을 열어 편집기에 띄울 때)
  * fromTiptap.ts 의 역방향. 기본값과 같은 값은 넣지 않아 편집기 문서를 깔끔하게 유지한다.
  */
+import { toDataUrl } from './image';
 import type { Doc, Paragraph, Table } from './types';
 import { defaultParaStyle } from './defaults';
 import { placeCells } from './table';
@@ -25,6 +26,10 @@ function paragraph(p: Paragraph): PMNode {
   for (const i of p.inlines) {
     if (i.kind === 'break') {
       content.push({ type: 'hardBreak' });
+      continue;
+    }
+    if (i.kind === 'image') {
+      content.push({ type: 'image', attrs: { src: toDataUrl(i), widthMm: Math.round(i.widthMm * 10) / 10, heightMm: Math.round(i.heightMm * 10) / 10 } });
       continue;
     }
     if (!i.text) continue;

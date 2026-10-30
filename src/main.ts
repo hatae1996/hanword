@@ -26,7 +26,7 @@ import { expandSnippet, openSnippetList, registerSnippet, reportParts, snippetIt
 import { generateJSON } from '@tiptap/html';
 import { safeFileName } from './save';
 import {
-  askSavePath, baseName, confirmDialog, download, extOf, isDesktop, pickFile, readPath, setWindowTitle, wireDesktop, writePath,
+  IMAGE_EXTS, askSavePath, baseName, confirmDialog, download, extOf, isDesktop, pickFile, pickImages, readPath, setWindowTitle, wireDesktop, writePath,
   type Format, type OpenedFile,
 } from './platform';
 import { SAMPLE_HTML } from './sample';
@@ -36,6 +36,8 @@ import { addRecent, recentFiles, removeRecent, whenText } from './recent';
 import { setupNavPane } from './ui/navpane';
 import { headerFooterDialog, pageNumberDialog, pageSetupDialog, paraShapeDialog } from './ui/pageDialogs';
 import { PageBreak } from './editor/pageBreak';
+import { availableWidthMm, imageAttrs, photoSheetHtml, prepareImage, resizeImageDialog } from './ui/images';
+import { contentWidthMm } from './model/defaults';
 import { listDialog } from './ui/dialog';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -48,14 +50,27 @@ const SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32];
 const editor = new Editor({
   element: $('editor'),
   extensions: [
-    ...schemaExtensions({ resizableTables: true }),
+    ...schemaExtensions({
+      resizableTables: true,
+      image: {
+        onEdit: (pos) => void resizeImageDialog(editor, pos),
+        onFiles: (files, pos) => void insertImageFiles(files.map((f) => f), pos),
+      },
+    }),
     FontSizeStep,
     Blanks.configure({ onCount: (n) => queueMicrotask(() => showBlanks(n)) }),
     FindReplace,
     Gaejo,
     PageBreak,
     TableKeys.configure({ calc: (o) => calc(o) }),
-    SlashMenu.configure({ items: () => [...reportParts(), ...snippetItems()] }),
+    SlashMenu.configure({
+      items: () => [
+        ...reportParts(),
+        { group: '보고서 부품', label: '그림', hint: '파일에서 그림 넣기 (Ctrl+N, I)', keywords: '그림 사진 image', run: (ed, r) => (ed.chain().focus().deleteRange(r).run(), void pickAndInsertImages()) },
+        { group: '보고서 부품', label: '사진대지', hint: '사진 여러 장을 표에 2장씩 + 설명', keywords: '사진대지 사진 photo', run: (ed, r) => (ed.chain().focus().deleteRange(r).run(), void makePhotoSheet()) },
+        ...snippetItems(),
+      ],
+    }),
     MarkdownPaste.configure({
       onConverted: (w) =>
         toast(`AI 글(마크다운)을 서식으로 바꿔 붙여넣었습니다${w.length ? ` · 빠진 요소: ${w.join(', ')}` : ''} — 글자 그대로는 Ctrl+Shift+V`),
@@ -125,6 +140,8 @@ const commands: Record<string, () => void> = {
   'header-footer': () => void editHeaderFooter(),
   'page-setup': () => void editPageSetup(),
   'para-shape': () => void paraShapeDialog(editor),
+  image: () => void pickAndInsertImages(),
+  'photo-sheet': () => void makePhotoSheet(),
 };
 document.querySelectorAll<HTMLButtonElement>('[data-cmd]').forEach((b) => {
   b.type = 'button';
@@ -147,6 +164,45 @@ colorInput.addEventListener('input', () => {
   chain().setColor(colorInput.value).run();
   $('color-swatch').style.borderBottomColor = colorInput.value;
 });
+
+// ── 그림 · 사진대지 ──────────────────────────────────────
+async function insertPrepared(files: { name: string; bytes: Uint8Array }[], pos: number | null = null) {
+  const bad: string[] = [];
+  const nodes: object[] = [];
+  const max = availableWidthMm(editor, contentWidthMm(state.page));
+  for (const f of files) {
+    const p = await prepareImage(f.bytes);
+    if (!p) bad.push(f.name);
+    else nodes.push({ type: 'image', attrs: imageAttrs(p, max) });
+  }
+  if (nodes.length) {
+    const c = editor.chain().focus();
+    if (pos !== null) c.insertContentAt(pos, nodes);
+    else c.insertContent(nodes);
+    c.run();
+  }
+  if (bad.length) toast(`그림으로 읽을 수 없는 파일: ${bad.join(', ')} (PNG·JPEG·GIF·BMP·WebP 만)`, true);
+  else if (nodes.length) toast(`그림 ${nodes.length}장을 넣었습니다 — 두 번 누르면 크기 바꾸기`);
+}
+async function insertImageFiles(files: File[], pos: number | null) {
+  await insertPrepared(await Promise.all(files.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), pos);
+}
+async function pickAndInsertImages() {
+  const files = await pickImages(true);
+  if (files.length) await insertPrepared(files);
+}
+async function makePhotoSheet() {
+  if (editor.isActive('table')) return toast('사진대지는 표 바깥에서 만드세요 (표 안의 표는 저장할 수 없음)', true);
+  const files = await pickImages(true);
+  if (!files.length) return;
+  const pics = (await Promise.all(files.map((f) => prepareImage(f.bytes)))).filter((p): p is NonNullable<typeof p> => !!p);
+  if (!pics.length) return toast('그림으로 읽을 수 없는 파일입니다', true);
+  const html = await photoSheetHtml(pics, contentWidthMm(state.page));
+  if (html) {
+    chain().insertContent(html).run();
+    toast(`사진 ${pics.length}장으로 사진대지를 만들었습니다 — "사진 N. ○○" 은 Tab 으로 채우세요`);
+  }
+}
 
 function calc(opts: Parameters<typeof sumTable>[1]) {
   const r = sumTable(editor, opts);
@@ -579,6 +635,7 @@ window.addEventListener(
   true,
 );
 const chordKeys: Record<string, () => void> = {
+  KeyI: () => void pickAndInsertImages(),
   KeyP: () => void editPageNumber(),
   KeyH: () => void editHeaderFooter(),
   KeyT: () => commands.table(),
@@ -670,7 +727,15 @@ window.addEventListener('beforeunload', (e) => {
   if (state.dirty && !isDesktop) e.preventDefault();
 });
 
-void wireDesktop({ isDirty: () => state.dirty, openPath, onDiscard: clearRecovery });
+// 끌어다 놓은 파일: 그림이면 커서 자리에 넣고, 문서면 연다
+void wireDesktop({
+  isDirty: () => state.dirty,
+  openPath: (path) => {
+    if (IMAGE_EXTS.includes(extOf(path))) void readPath(path).then((f) => insertPrepared([f]));
+    else void openPath(path);
+  },
+  onDiscard: clearRecovery,
+});
 
 // ── 최근 문서 (데스크톱) ─────────────────────────────────
 $('recent-doc').hidden = !isDesktop;

@@ -6,7 +6,8 @@
  * 그림·도형·머리말/꼬리말·각주 등은 건너뛰고 warnings 에 남긴다.
  */
 import JSZip from 'jszip';
-import type { Align, Block, BorderLine, CellBorders, Doc, Inline, PageSetup, Paragraph, ParaRole, TableCell, TextRun } from '../model/types';
+import type { Align, Block, BorderLine, CellBorders, Doc, ImageRun, Inline, PageSetup, Paragraph, ParaRole, TableCell, TextRun } from '../model/types';
+import { bytesToBase64, sniffMime } from '../model/image';
 import { cleanBorders } from '../model/borders';
 import { DEFAULT_PAGE, contentWidthMm, defaultParaStyle } from '../model/defaults';
 import { cleanParagraph } from '../model/normalize';
@@ -210,6 +211,27 @@ class Reader {
   warnings = new Set<string>();
   /** "같은 스타일 문단 사이 간격 무시"(contextualSpacing) 처리를 위한 직전 문단 */
   private prev?: { para: Paragraph; styleId?: string; contextual: boolean };
+  /** 본문 관계(rId → 파일)와 미리 읽은 그림 */
+  rels = new Map<string, string>();
+  media = new Map<string, { mime: ImageRun['mime']; data: string }>();
+
+  /** w:drawing — 글자처럼 취급(wp:inline)·떠 있는 그림(wp:anchor) 모두 그림 하나로 */
+  readDrawing(d: El, out: Inline[]) {
+    const holder = kid(d, 'inline') ?? kid(d, 'anchor');
+    const blip = descendants(d, 'blip')[0];
+    const target = blip ? this.rels.get(attr(blip, 'embed') ?? '') : undefined;
+    const img = target ? this.media.get(target.replace(/^\/?word\//, '')) : undefined;
+    if (!holder || !img) {
+      this.warnings.add('그림·도형');
+      return;
+    }
+    if (holder.localName === 'anchor') this.warnings.add('글 뒤·앞 그림(글자처럼 취급으로 바꿈)');
+    const ext = kid(holder, 'extent');
+    const emu = (v: string | null) => (Number(v) || 0) / 36000; // EMU → mm
+    const w = emu(attr(ext, 'cx'));
+    const h = emu(attr(ext, 'cy'));
+    out.push({ kind: 'image', mime: img.mime, data: img.data, widthMm: Math.round(w * 10) / 10 || 50, heightMm: Math.round(h * 10) / 10 || 37.5 });
+  }
   /** 앞 문단에 쪽 나누기(br type=page)가 있었으면 다음 문단을 새 쪽에서 */
   private pendingBreak = false;
 
@@ -345,7 +367,8 @@ class Reader {
         case 'br': if (attr(c, 'type') !== 'page' && attr(c, 'type') !== 'column') out.push({ kind: 'break' }); break;
         case 'cr': out.push({ kind: 'break' }); break;
         case 'noBreakHyphen': out.push({ kind: 'text', text: '-', ...style }); break;
-        case 'drawing': case 'pict': case 'object': this.warnings.add('그림·도형'); break;
+        case 'drawing': this.readDrawing(c, out); break;
+        case 'pict': case 'object': this.warnings.add('그림·도형'); break;
         case 'footnoteReference': this.warnings.add('각주'); break;
         case 'endnoteReference': this.warnings.add('미주'); break;
       }
@@ -458,6 +481,14 @@ export async function readDocx(bytes: Uint8Array | ArrayBuffer, title = '문서'
     return f ? parseXml(await f.async('string')) : undefined;
   };
   const r = new Reader();
+  // 본문 관계와 그림 파일을 먼저 읽어 둔다 (그림 · 머리말)
+  const relsXml = await optional('word/_rels/document.xml.rels');
+  for (const rel of kids(relsXml?.documentElement, 'Relationship')) r.rels.set(attr(rel, 'Id') ?? '', attr(rel, 'Target') ?? '');
+  for (const f of zip.file(/^word\/media\//)) {
+    const bytes = await f.async('uint8array');
+    const mime = sniffMime(bytes);
+    if (mime) r.media.set(f.name.replace(/^word\//, ''), { mime, data: bytesToBase64(bytes) });
+  }
   r.readStyles(await optional('word/styles.xml'));
   r.numbering = new Numbering(await optional('word/numbering.xml'));
 
@@ -470,9 +501,7 @@ export async function readDocx(bytes: Uint8Array | ArrayBuffer, title = '문서'
 
   // 머리말·꼬리말 (기본 = 모든 쪽): 쪽 번호 필드(PAGE)가 든 문단은 쪽 번호로
   const extra: Pick<Doc, 'header' | 'footer' | 'pageNumber'> = {};
-  const relsXml = await optional('word/_rels/document.xml.rels');
-  const rels = new Map<string, string>();
-  for (const rel of kids(relsXml?.documentElement, 'Relationship')) rels.set(attr(rel, 'Id') ?? '', attr(rel, 'Target') ?? '');
+  const rels = r.rels;
   const sect = kids(body, 'sectPr').pop();
   for (const kind of ['header', 'footer'] as const) {
     const refs = kids(sect, `${kind}Reference`);

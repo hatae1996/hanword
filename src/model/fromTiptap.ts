@@ -5,6 +5,7 @@ import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaRole, RunStyl
 import { DEFAULT_PAGE, LIST_INDENT_MM, contentWidthMm, defaultParaStyle } from './defaults';
 import { normalizeWidths, placeCells } from './table';
 import { cleanBorders, resolveEdges } from './borders';
+import { base64ToBytes, fitSize, parseDataUrl, pixelSize } from './image';
 import { pxToMm } from './units';
 
 export type PMNode = {
@@ -15,8 +16,12 @@ export type PMNode = {
   marks?: { type: string; attrs?: Record<string, any> }[];
 };
 
+/** 크기 없이 들어온 그림을 맞출 본문 폭 (tiptapToDoc 이 정한다) */
+let contentWidth = 150;
+
 export function tiptapToDoc(json: PMNode, title = '문서', pageSetup: PageSetup = DEFAULT_PAGE): Doc {
   const page = { ...pageSetup };
+  contentWidth = contentWidthMm(page);
   const blocks: Block[] = [];
   for (const node of json.content ?? []) convertBlock(node, blocks, contentWidthMm(page));
   if (!blocks.length || blocks[blocks.length - 1].type === 'table') blocks.push(emptyParagraph());
@@ -106,6 +111,20 @@ function toParagraph(node: PMNode, role: ParaRole): Paragraph {
   const inlines: Inline[] = [];
   for (const child of node.content ?? []) {
     if (child.type === 'hardBreak') inlines.push({ kind: 'break' });
+    else if (child.type === 'image') {
+      const d = parseDataUrl(child.attrs?.src ?? '');
+      if (d) {
+        const px = pixelSize(base64ToBytes(d.data), d.mime);
+        const fit = fitSize(px, contentWidth);
+        const w = typeof child.attrs?.widthMm === 'number' ? child.attrs.widthMm : null;
+        const h = typeof child.attrs?.heightMm === 'number' ? child.attrs.heightMm : null;
+        // 크기가 하나만 있으면 원본 비율로 나머지를 정한다
+        const ratio = px && px.w ? px.h / px.w : fit.heightMm / fit.widthMm;
+        const widthMm = w ?? (h ? h / ratio : fit.widthMm);
+        const heightMm = h ?? widthMm * ratio;
+        inlines.push({ kind: 'image', mime: d.mime, data: d.data, widthMm: Math.round(widthMm * 10) / 10, heightMm: Math.round(heightMm * 10) / 10 });
+      }
+    }
     else if (child.type === 'text' && child.text) inlines.push({ kind: 'text', text: child.text, ...marksToStyle(child.marks) });
   }
   const para: Paragraph = { type: 'paragraph', role, style, inlines };

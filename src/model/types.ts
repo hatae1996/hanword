@@ -33,7 +33,17 @@ export interface BreakRun {
   kind: 'break';
 }
 
-export type Inline = TextRun | BreakRun;
+/** 그림 (글자처럼 취급) — 한글 hp:pic(treatAsChar) + BinData ↔ Word wp:inline + media */
+export interface ImageRun {
+  kind: 'image';
+  mime: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp';
+  /** 원본 바이트 (base64) */
+  data: string;
+  widthMm: number;
+  heightMm: number;
+}
+
+export type Inline = TextRun | BreakRun | ImageRun;
 
 export interface ParaStyle {
   align: Align;

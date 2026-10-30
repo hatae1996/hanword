@@ -5,7 +5,8 @@
  * 지원하지 않는 요소(그림, 도형, 수식, 머리말/꼬리말, 각주 …)는 건너뛰고 warnings 에 남긴다.
  */
 import JSZip from 'jszip';
-import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaStyle, Table, TableCell, TextRun, CellBorders, LineStyle, PageNumber } from '../model/types';
+import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaStyle, Table, TableCell, TextRun, CellBorders, LineStyle, PageNumber, ImageRun } from '../model/types';
+import { bytesToBase64, sniffMime } from '../model/image';
 import { cleanBorders } from '../model/borders';
 import { DEFAULT_PAGE, contentWidthMm, defaultParaStyle } from '../model/defaults';
 import { cleanParagraph } from '../model/normalize';
@@ -151,6 +152,22 @@ class Reader {
   header?: Paragraph[];
   footer?: Paragraph[];
   pageNumber?: PageNumber;
+  /** 그림 원본: binaryItemIDRef → 바이트 */
+  bins = new Map<string, { mime: ImageRun['mime']; data: string }>();
+
+  readPicture(pic: El, out: Inline[]) {
+    const ref = attr(descendants(pic, 'img')[0], 'binaryItemIDRef') ?? '';
+    const bin = this.bins.get(ref);
+    if (!bin) {
+      this.warnings.add('그림(원본 파일 없음)');
+      return;
+    }
+    const sz = kid(pic, 'sz') ?? kid(pic, 'curSz');
+    const w = hwpToMm(num(attr(sz, 'width')) ?? 0);
+    const h = hwpToMm(num(attr(sz, 'height')) ?? 0);
+    if (attr(kid(pic, 'pos'), 'treatAsChar') === '0') this.warnings.add('글 뒤·앞 그림(글자처럼 취급으로 바꿈)');
+    out.push({ kind: 'image', mime: bin.mime, data: bin.data, widthMm: Math.round(w * 10) / 10 || 50, heightMm: Math.round(h * 10) / 10 || 37.5 });
+  }
 
   /** 머리말/꼬리말: 쪽 번호 자동 번호(autoNum PAGE)가 든 문단은 쪽 번호로 바꾸고 나머지는 문단으로 */
   readHeaderFooter(el: El, kind: 'header' | 'footer') {
@@ -194,6 +211,7 @@ class Reader {
       for (const c of kids(run)) {
         const name = c.localName;
         if (name === 't') this.readText(c, style, inlines);
+        else if (name === 'pic') this.readPicture(c, inlines);
         else if (name === 'tbl') {
           flush(false);
           hadTable = true;
@@ -323,6 +341,20 @@ export async function readHwpx(bytes: Uint8Array | ArrayBuffer, title = '문서'
   if (!headerFile) throw new Error('HWPX 구조가 아닙니다 (Contents/header.xml 없음)');
   const r = new Reader();
   r.readHeader(parseXml(await headerFile.async('string')));
+  // 그림 원본: content.hpf 목록의 id → BinData 파일
+  const hpfFile = zip.file('Contents/content.hpf');
+  if (hpfFile) {
+    const hpfDoc = parseXml(await hpfFile.async('string'));
+    for (const item of descendants(hpfDoc.documentElement, 'item')) {
+      const href = attr(item, 'href') ?? '';
+      if (!/^BinData\//i.test(href)) continue;
+      const f = zip.file(href);
+      if (!f) continue;
+      const bytes = await f.async('uint8array');
+      const mime = sniffMime(bytes);
+      if (mime) r.bins.set(attr(item, 'id') ?? '', { mime, data: bytesToBase64(bytes) });
+    }
+  }
 
   const paths = await sectionPaths(zip);
   if (!paths.length) throw new Error('본문(section)이 없습니다');

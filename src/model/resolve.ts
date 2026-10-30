@@ -54,7 +54,7 @@ export function xmlEscape(s: string): string {
 
 export function plainText(blocks: Doc['blocks']): string {
   const lines: string[] = [];
-  const para = (p: Paragraph) => p.inlines.map((i) => (i.kind === 'text' ? i.text : '\n')).join('');
+  const para = (p: Paragraph) => p.inlines.map((i) => (i.kind === 'text' ? i.text : i.kind === 'break' ? '\n' : '')).join('');
   for (const b of blocks) {
     if (b.type === 'paragraph') lines.push(para(b));
     else for (const row of b.rows) lines.push(row.map((c) => c.blocks.map(para).join(' ')).join('\t'));

@@ -9,8 +9,9 @@ import { TableKit } from '@tiptap/extension-table';
 import type { AnyExtension } from '@tiptap/core';
 import { ParagraphFormat } from './paragraphFormat';
 import { LetterSpacing } from './letterSpacing';
+import { ImageNode } from './image';
 
-export function schemaExtensions(opts: { resizableTables?: boolean } = {}): AnyExtension[] {
+export function schemaExtensions(opts: { resizableTables?: boolean; image?: Parameters<typeof ImageNode.configure>[0] } = {}): AnyExtension[] {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
@@ -28,5 +29,6 @@ export function schemaExtensions(opts: { resizableTables?: boolean } = {}): AnyE
     TableKit.configure({ table: { resizable: !!opts.resizableTables, cellMinWidth: 30 } }),
     ParagraphFormat,
     LetterSpacing,
+    ImageNode.configure(opts.image ?? {}),
   ];
 }

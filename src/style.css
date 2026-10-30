@@ -318,3 +318,7 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .ProseMirror .hw-page-break::before { content: ''; position: absolute; left: -6mm; right: -6mm; top: -7mm; border-top: 1px dashed #8fa3bf; }
 .ProseMirror .hw-page-break::after { content: '쪽 나누기'; position: absolute; left: 50%; top: -7mm; transform: translate(-50%, -50%); padding: 0 8px;
   background: var(--paper); color: #6f86a8; font: 11px/1.4 var(--font-ui); text-indent: 0; letter-spacing: 0; }
+
+/* ── 그림 ── */
+.ProseMirror img.hw-image { display: inline-block; vertical-align: bottom; max-width: 100%; height: auto; object-fit: contain; }
+.ProseMirror img.ProseMirror-selectednode { outline: 2px solid var(--accent); outline-offset: 1px; }

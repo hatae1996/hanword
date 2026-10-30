@@ -9,6 +9,7 @@ import type { Block, Doc, Inline, Paragraph, ParaRole, TableCell, TextRun } from
 import { DEFAULT_COLOR, DEFAULT_FONT, ROLE_RUN } from './defaults';
 import { resolveRun } from './resolve';
 import { cleanBorders, resolveEdges } from './borders';
+import { imageHash } from './image';
 
 const round = (v: number, step: number) => Math.round(v / step) * step;
 const close = (a: number, b: number, eps: number) => Math.abs(a - b) <= eps;
@@ -84,7 +85,9 @@ export function canonical(doc: Doc): string {
     role: p.role,
     style: { align: p.style.align, indentLeftMm: r1(p.style.indentLeftMm), firstLineMm: r1(p.style.firstLineMm), lineSpacingPct: p.style.lineSpacingPct, spaceBeforePt: p.style.spaceBeforePt, spaceAfterPt: p.style.spaceAfterPt },
     // 줄바꿈 없는 공백(U+00A0)은 화면에서 일반 공백과 같다
-    inlines: mergeInlines(p.inlines.map((i) => (i.kind === 'text' ? cleanRun(p, { ...i, text: i.text.replace(/\u00A0/g, ' ') }) : i))),
+    inlines: mergeInlines(p.inlines.map((i) => (i.kind === 'text' ? cleanRun(p, { ...i, text: i.text.replace(/\u00A0/g, ' ') }) : i))).map((i) =>
+      i.kind === 'image' ? { kind: 'image', mime: i.mime, data: imageHash(i.data), w: Math.round(i.widthMm * 2) / 2, h: Math.round(i.heightMm * 2) / 2 } : i,
+    ),
     ...(p.pageBreak ? { pageBreak: true } : {}),
   });
   const cell = (c: TableCell) => ({ colspan: c.colspan, rowspan: c.rowspan, bg: c.bg?.toUpperCase() ?? null, borders: cleanBorders(c.borders) ?? null, blocks: c.blocks.map(para) });

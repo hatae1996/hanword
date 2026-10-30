@@ -56,6 +56,27 @@ export async function pickFile(): Promise<OpenedFile | null> {
   });
 }
 
+export const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'];
+
+/** 그림 파일 고르기 (여러 장) */
+export async function pickImages(multiple = true): Promise<OpenedFile[]> {
+  if (isDesktop) {
+    const [, dialog] = await tauri();
+    const picked = await dialog.open({ multiple, directory: false, filters: [{ name: '그림', extensions: IMAGE_EXTS }] });
+    const paths = Array.isArray(picked) ? picked : typeof picked === 'string' ? [picked] : [];
+    return Promise.all(paths.map(readPath));
+  }
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = multiple;
+    input.onchange = async () => resolve(Promise.all([...(input.files ?? [])].map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))));
+    input.oncancel = () => resolve([]);
+    input.click();
+  });
+}
+
 /** 데스크톱: 저장 위치 묻기 → 경로 반환 (취소하면 null) */
 export async function askSavePath(defaultName: string, format: Format): Promise<string | null> {
   const [, dialog] = await tauri();

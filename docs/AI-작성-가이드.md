@@ -195,9 +195,28 @@ HanWord 에서 빈칸이 노란색으로 표시되고 **Tab** 으로 하나씩 �
 <p style="page-break-before:always"><span style="font-family:HY헤드라인M; font-size:16pt">Ⅱ. 추진 계획</span></p>
 ```
 
+### 그림 · 사진대지
+
+마크다운 파일과 같은 폴더의 그림 파일을 경로로 씁니다. 변환기가 그림을 문서 안에 넣습니다 (PNG·JPEG·GIF·BMP).
+
+```markdown
+![이관 전 서고](사진1.jpg)
+```
+
+크기를 정하려면 HTML 로 씁니다 (하나만 주면 원본 비율로 나머지를 정함). 사진대지는 칸마다 사진, 아래 줄에 설명:
+
+```html
+<table>
+  <tr><td><p align="center"><img src="사진1.jpg" style="width:70mm"></p></td><td><p align="center"><img src="사진2.jpg" style="width:70mm"></p></td></tr>
+  <tr><td align="center"><span style="font-size:11pt">사진 1. 이관 전 서고</span></td><td align="center"><span style="font-size:11pt">사진 2. 이관 후 서가</span></td></tr>
+</table>
+```
+
+한글/Word 문서를 마크다운으로 읽으면 그림은 `문서명_그림1.png` 처럼 같은 폴더에 파일로 나옵니다. 웹 주소(https://…) 그림은 넣지 못합니다.
+
 ### 아직 지원하지 않는 것
 
-그림, 가로줄, 각주, 수식, 표 안의 표. (코드 블록·인용은 일반 문단으로 바뀝니다)
+글 뒤·앞으로 떠 있는 그림(글자처럼 취급으로 바뀜), 도형, 가로줄, 각주, 수식, 표 안의 표. (코드 블록·인용은 일반 문단으로 바뀝니다)
 
 ## 3. 공문서 작성 관례 (참고)
 

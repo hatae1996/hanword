@@ -11,6 +11,7 @@ import {
   Footer,
   Header,
   HeadingLevel,
+  ImageRun,
   PageNumber,
   LineRuleType,
   Packer,
@@ -27,6 +28,7 @@ import {
 } from 'docx';
 import type { Align, BorderLine, Doc, Paragraph, Table } from '../model/types';
 import { resolveEdges } from '../model/borders';
+import { IMAGE_EXT, base64ToBytes } from '../model/image';
 import { DEFAULT_FONT, DEFAULT_SIZE_PT, ROLE_PARA, ROLE_RUN, TABLE_DEFAULTS } from '../model/defaults';
 import { cleanText, maxSizePt, resolveRun } from '../model/resolve';
 import { placeCells } from '../model/table';
@@ -51,11 +53,18 @@ function headingStyle(role: 'h1' | 'h2' | 'h3', level: number) {
   };
 }
 
+const mmToPx = (mm: number) => Math.max(1, Math.round((mm * 96) / 25.4));
+
 function paragraph(p: Paragraph): DParagraph {
-  const children: DTextRun[] = [];
+  const children: (DTextRun | ImageRun)[] = [];
   for (const i of p.inlines) {
     if (i.kind === 'break') {
       children.push(new DTextRun({ break: 1 }));
+      continue;
+    }
+    if (i.kind === 'image') {
+      // 글자처럼 취급(wp:inline) — 한글 treatAsChar 와 같은 배치
+      children.push(new ImageRun({ type: IMAGE_EXT[i.mime] as 'png', data: base64ToBytes(i.data), transformation: { width: mmToPx(i.widthMm), height: mmToPx(i.heightMm) } }));
       continue;
     }
     const r = resolveRun(p, i);

@@ -14,8 +14,15 @@ const cell = (text: string, attrs: N = {}, marks: N[] = []): N => ({
   content: [p(text ? [t(text, ...marks)] : [])],
 });
 const row = (...cells: N[]): N => ({ type: 'tableRow', content: cells });
+const fixture = (name: string) => readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
+const img = (name: string, widthMm: number, heightMm: number): N => ({
+  type: 'image',
+  attrs: { src: `data:image/${name.endsWith('.png') ? 'png' : 'jpeg'};base64,${fixture(name).toString('base64')}`, widthMm, heightMm },
+});
 const doc = (...content: N[]): N => ({ type: 'doc', content });
 import type { Doc } from '../src/model/types';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 export const SAMPLES: Record<string, N> = {
   '01-서식': doc(
@@ -115,6 +122,21 @@ export const SAMPLES: Record<string, N> = {
     { type: 'paragraph', attrs: { textAlign: null, pageBreak: true }, content: [t('둘째 쪽은 이 문단부터')] },
     p([t('둘째 쪽 본문')]),
     { type: 'heading', attrs: { level: 1, textAlign: null, pageBreak: true }, content: [t('셋째 쪽 제목')] },
+    p([t('끝')]),
+  ),
+  // 그림: 문단 안 그림 + 사진대지 모양 표 (칸마다 그림, 아래 줄 설명)
+  '06-사진': doc(
+    p([t('사진 앞 글 '), img('사진1.png', 60, 45), t(' 사진 뒤 글')]),
+    {
+      type: 'table',
+      content: [
+        row(
+          { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [p([img('사진1.png', 70, 52.5)], 'center')] },
+          { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [p([img('사진2.jpg', 70, 43.8)], 'center')] },
+        ),
+        row(cell('사진 1. 이관 전 서고'), cell('사진 2. 이관 후 서가')),
+      ],
+    },
     p([t('끝')]),
   ),
 };

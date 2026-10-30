@@ -10,8 +10,10 @@
  * 앱(HanWord)과 완전히 같은 변환 규칙·저장기를 쓴다. 만든 파일은 다시 열어 글자 누락이 없는지 스스로 확인한다.
  * 작성 문법: docs/AI-작성-가이드.md
  */
-import { readFileSync, writeFileSync } from 'node:fs';
-import { basename, extname } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, extname, join, resolve } from 'node:path';
+import { IMAGE_EXT, base64ToBytes, bytesToBase64, sniffMime } from '../src/model/image';
+import type { ImageRun } from '../src/model/types';
 import { nodeGenerateJSON } from '../src/ai/node';
 import { docToMarkdown, markdownToDoc } from '../src/ai/markdown';
 import { docToHwpx } from '../src/export/hwpx';
@@ -44,11 +46,42 @@ const fmtOf = (p: string): Fmt | null => {
 async function readInput(path: string): Promise<{ doc: Doc; warnings: string[] }> {
   const fmt = path === '-' ? 'md' : fmtOf(path);
   const title = path === '-' ? '문서' : basename(path, extname(path));
-  if (fmt === 'md') return markdownToDoc(readFileSync(path === '-' ? 0 : path, 'utf8'), nodeGenerateJSON, title);
+  if (fmt === 'md') {
+    const md = readFileSync(path === '-' ? 0 : path, 'utf8');
+    return markdownToDoc(inlineImages(md, path === '-' ? process.cwd() : dirname(resolve(path))), nodeGenerateJSON, title);
+  }
   if (fmt === 'hwpx') return readHwpx(readFileSync(path), title);
   if (fmt === 'docx') return readDocx(readFileSync(path), title);
   if (/\.hwp$/i.test(path)) throw new Error('구형 .hwp 는 읽을 수 없습니다. 한글에서 "다른 이름으로 저장 → HWPX" 후 다시 시도하세요.');
   throw new Error(`알 수 없는 입력 형식입니다: ${path} (.md, .hwpx, .docx 만 가능)`);
+}
+
+/** 마크다운 속 그림 파일 경로(![설명](사진.jpg), <img src="사진.jpg">)를 data: 주소로 바꾼다 (마크다운 파일 기준 상대 경로) */
+function inlineImages(md: string, baseDir: string): string {
+  const toData = (src: string): string | null => {
+    if (/^data:|^https?:/i.test(src)) return null;
+    const p = resolve(baseDir, decodeURI(src));
+    if (!existsSync(p)) {
+      console.error(`⚠ 그림 파일이 없습니다: ${src}`);
+      return null;
+    }
+    const bytes = new Uint8Array(readFileSync(p));
+    const mime = sniffMime(bytes);
+    if (!mime) {
+      console.error(`⚠ 그림 형식을 읽을 수 없습니다 (PNG·JPEG·GIF·BMP 만): ${src}`);
+      return null;
+    }
+    return `data:${mime};base64,${bytesToBase64(bytes)}`;
+  };
+  return md
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (m, alt: string, src: string) => {
+      const d = toData(src);
+      return d ? `<img src="${d}" alt="${alt.replace(/"/g, '')}">` : m;
+    })
+    .replace(/(<img\b[^>]*\bsrc\s*=\s*")([^"]+)(")/gi, (m, a: string, src: string, b: string) => {
+      const d = toData(src);
+      return d ? `${a}${d}${b}` : m;
+    });
 }
 
 /** 만든 파일을 다시 열어 글자가 하나도 빠지지 않았는지 확인 */
@@ -88,8 +121,21 @@ async function main() {
   for (const t of targets) {
     const fmt = fmtOf(t);
     if (fmt === 'md') {
-      writeFileSync(t, docToMarkdown(doc));
-      console.log(`✓ ${t}`);
+      // 그림은 마크다운 옆에 파일로 빼고 경로로 적는다 (문서명_그림1.png …)
+      let n = 0;
+      const stem = basename(t, extname(t));
+      const saved = new Map<string, string>();
+      const imageSrc = (img: ImageRun) => {
+        const hit = saved.get(img.data);
+        if (hit) return hit;
+        const name = `${stem}_그림${++n}.${IMAGE_EXT[img.mime]}`;
+        writeFileSync(join(dirname(resolve(t)), name), base64ToBytes(img.data));
+        const ref = name.replace(/ /g, '%20');
+        saved.set(img.data, ref);
+        return ref;
+      };
+      writeFileSync(t, docToMarkdown(doc, { imageSrc }));
+      console.log(`✓ ${t}${n ? `  (그림 ${n}개: ${stem}_그림1… 같은 폴더)` : ''}`);
     } else if (fmt === 'hwpx' || fmt === 'docx') {
       const bytes = fmt === 'hwpx' ? await docToHwpx(doc) : await docToDocx(doc);
       const check = await selfCheck(bytes, fmt, doc);

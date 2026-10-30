@@ -12,7 +12,8 @@
  *  - 맨 위 설정: ---\n제목: …\n용지: A4 가로\n여백: 20 30 15 30\n글꼴: 바탕\n글자크기: 11\n---
  */
 import { Marked, type Tokens } from 'marked';
-import type { Align, Block, Doc, Inline, PageNumber, PageSetup, Paragraph, Table, TextRun } from '../model/types';
+import type { Align, Block, Doc, ImageRun, Inline, PageNumber, PageSetup, Paragraph, Table, TextRun } from '../model/types';
+import { toDataUrl } from '../model/image';
 import { DEFAULT_FONT, DEFAULT_PAGE, ROLE_RUN, contentWidthMm, defaultParaStyle } from '../model/defaults';
 import { cleanRun } from '../model/normalize';
 import { tiptapToDoc, type PMNode } from '../model/fromTiptap';
@@ -263,11 +264,12 @@ export function markdownToHtml(md: string): MdResult {
   const marked = new Marked({ gfm: true, breaks: true, async: false });
   marked.use({
     walkTokens(t) {
-      if (t.type === 'image') warnings.add('그림(빠짐)');
+      // 그림은 data: 주소만 넣을 수 있다 (파일 경로는 변환기가 미리 data: 로 바꿈, 웹 주소는 넣지 못함)
+      if (t.type === 'image' && !/^data:image\//i.test((t as Tokens.Image).href)) warnings.add('웹 주소 그림(빠짐 — 파일로 받아 경로를 쓰세요)');
       else if (t.type === 'hr') warnings.add('가로줄(빠짐)');
       else if (t.type === 'code') warnings.add('코드 블록(일반 글로 바뀜)');
       else if (t.type === 'blockquote') warnings.add('인용(일반 문단으로 바뀜)');
-      else if (t.type === 'html' && /<img\b/i.test((t as Tokens.HTML).text)) warnings.add('그림(빠짐)');
+      else if (t.type === 'html' && /<img\b[^>]*\bsrc\s*=\s*"(?!data:image\/)/i.test((t as Tokens.HTML).text)) warnings.add('웹 주소 그림(빠짐 — 파일로 받아 경로를 쓰세요)');
     },
     renderer: {
       heading(this: any, t: Tokens.Heading) {
@@ -377,6 +379,10 @@ function inlines(p: Paragraph, mode: 'md' | 'html'): string {
       out += '<br>';
       return;
     }
+    if (i.kind === 'image') {
+      out += `<img src="${imageSrc(i)}" style="width:${+i.widthMm.toFixed(1)}mm; height:${+i.heightMm.toFixed(1)}mm">`;
+      return;
+    }
     if (!i.text) return;
     let text = i.text;
     if (k === firstText) text = text.replace(/^ +/, (m) => '\u00A0'.repeat(m.length));
@@ -480,7 +486,20 @@ function tableToMd(t: Table, contentMm: number): string {
   return `<table>\n${rows.join('\n')}\n</table>`;
 }
 
-export function docToMarkdown(doc: Doc): string {
+/** 그림을 마크다운에 어떻게 적을지 (기본: data: 주소. 변환기는 옆에 그림 파일로 빼서 경로를 적는다) */
+let imageSrc: (img: ImageRun) => string = toDataUrl;
+
+export function docToMarkdown(doc: Doc, opts: { imageSrc?: (img: ImageRun) => string } = {}): string {
+  const prevSrc = imageSrc;
+  imageSrc = opts.imageSrc ?? toDataUrl;
+  try {
+    return docToMarkdownInner(doc);
+  } finally {
+    imageSrc = prevSrc;
+  }
+}
+
+function docToMarkdownInner(doc: Doc): string {
   const lines: string[] = [];
   const meta: string[] = [];
   if (doc.title) meta.push(`제목: ${doc.title}`);

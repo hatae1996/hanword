@@ -13,13 +13,14 @@
  *   - linesegarray(줄 배치 캐시)는 생략 → 한글이 열 때 다시 계산한다.
  */
 import JSZip from 'jszip';
-import type { Align, BorderLine, CellBorders, Doc, Paragraph, ParaRole, ParaStyle, Table, TableCell } from '../model/types';
+import type { Align, BorderLine, CellBorders, Doc, ImageRun, Paragraph, ParaRole, ParaStyle, Table, TableCell } from '../model/types';
 import { DEFAULT_BORDER, cleanBorders, resolveEdges } from '../model/borders';
 import { TABLE_DEFAULTS, defaultParaStyle } from '../model/defaults';
 import { maxSizePt, plainText, resolveRun, runKey, xmlEscape, type ResolvedRun } from '../model/resolve';
 import { placeCells } from '../model/table';
 import { hwpBorderWidth, mmToHwp, ptToHwp } from '../model/units';
 import { BLANK_HWPX_BASE64 } from './templates.generated';
+import { IMAGE_EXT, base64ToBytes as base64ToBytes2 } from '../model/image';
 
 const LANGS = ['HANGUL', 'LATIN', 'HANJA', 'JAPANESE', 'OTHER', 'SYMBOL', 'USER'] as const;
 const LANG_ATTR = ['hangul', 'latin', 'hanja', 'japanese', 'other', 'symbol', 'user'] as const;
@@ -59,6 +60,17 @@ class HeaderBuilder {
   private readonly paraBase: number;
   private readonly styleBase: number;
   readonly tableBorderFillId: number;
+  /** 그림 원본 (BinData/imageN.ext) — 같은 그림은 한 번만 */
+  readonly bins: { id: string; file: string; mime: string; ext: string; data: string }[] = [];
+  binData(img: ImageRun): string {
+    const hit = this.bins.find((b) => b.data === img.data);
+    if (hit) return hit.id;
+    const n = this.bins.length + 1;
+    const ext = IMAGE_EXT[img.mime];
+    this.bins.push({ id: `image${n}`, file: `image${n}.${ext}`, mime: img.mime, ext, data: img.data });
+    return `image${n}`;
+  }
+
   /** 칸 모양(배경색 + 테두리)별 borderFill — 기본 모양 = tableBorderFillId */
   private cellFills: { bg?: string; borders?: CellBorders }[] = [];
   private cellFillKeys: string[] = [];
@@ -184,6 +196,14 @@ class HeaderBuilder {
       })
       .join('');
     xml = appendItems(xml, 'styles', styleXml, this.headingStyles.size);
+
+    // 6) 그림 목록 (한글이 그림 파일을 찾는 목록)
+    if (this.bins.length) {
+      const items = this.bins.map((b, i) => `<hh:binItem id="${i}" Type="Embedding" BinData="${b.file}" Format="${b.ext}"/>`).join('');
+      xml = /<hh:binDataList itemCnt="\d+">/.test(xml)
+        ? appendItems(xml, 'binDataList', items, this.bins.length)
+        : xml.replace('</hh:refList>', `<hh:binDataList itemCnt="${this.bins.length}">${items}</hh:binDataList></hh:refList>`);
+    }
     return xml;
   }
 }
@@ -235,6 +255,10 @@ class SectionBuilder {
         runs += `<hp:run charPrIDRef="${lastChar}"><hp:t><hp:lineBreak/></hp:t></hp:run>`;
         continue;
       }
+      if (i.kind === 'image') {
+        runs += `<hp:run charPrIDRef="${lastChar}">${this.picture(i)}</hp:run>`;
+        continue;
+      }
       if (!i.text) continue;
       lastChar = this.hb.charPr(resolveRun(p, i));
       runs += `<hp:run charPrIDRef="${lastChar}"><hp:t>${xmlEscape(i.text)}</hp:t></hp:run>`;
@@ -246,6 +270,27 @@ class SectionBuilder {
 
   private p(paraPrId: number, inner: string, styleId = 0, pageBreak = false): string {
     return `<hp:p id="${this.nextParaId++}" paraPrIDRef="${paraPrId}" styleIDRef="${styleId}" pageBreak="${pageBreak ? 1 : 0}" columnBreak="0" merged="0">${inner}</hp:p>`;
+  }
+
+  /** 그림: 글자처럼 취급(treatAsChar) — 한글이 그림 넣기로 만드는 모양과 같은 요소들 */
+  picture(img: ImageRun): string {
+    const bin = this.hb.binData(img);
+    const w = mmToHwp(img.widthMm);
+    const h = mmToHwp(img.heightMm);
+    const id = 1000000000 + this.nextObjId++;
+    const ident = (tag: string) => `<hc:${tag} e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/>`;
+    return (
+      `<hp:pic id="${id}" zOrder="${this.nextObjId - 1}" numberingType="PICTURE" textWrap="SQUARE" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" href="" groupLevel="0" instid="${id}" reverse="0">` +
+      `<hp:offset x="0" y="0"/><hp:orgSz width="${w}" height="${h}"/><hp:curSz width="${w}" height="${h}"/><hp:flip horizontal="0" vertical="0"/>` +
+      `<hp:rotationInfo angle="0" centerX="${Math.round(w / 2)}" centerY="${Math.round(h / 2)}" rotateimage="1"/>` +
+      `<hp:renderingInfo>${ident('transMatrix')}${ident('scaMatrix')}${ident('rotMatrix')}</hp:renderingInfo>` +
+      `<hp:imgRect><hc:pt0 x="0" y="0"/><hc:pt1 x="${w}" y="0"/><hc:pt2 x="${w}" y="${h}"/><hc:pt3 x="0" y="${h}"/></hp:imgRect>` +
+      `<hp:imgClip left="0" right="${w}" top="0" bottom="${h}"/><hp:inMargin left="0" right="0" top="0" bottom="0"/><hp:imgDim dimwidth="${w}" dimheight="${h}"/>` +
+      `<hc:img binaryItemIDRef="${bin}" bright="0" contrast="0" effect="REAL_PIC" alpha="0"/><hp:effects/>` +
+      `<hp:sz width="${w}" widthRelTo="ABSOLUTE" height="${h}" heightRelTo="ABSOLUTE" protect="0"/>` +
+      `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>` +
+      `<hp:outMargin left="0" right="0" top="0" bottom="0"/><hp:shapeComment/></hp:pic>`
+    );
   }
 
   /** 머리말/꼬리말 컨트롤 (한글이 저장하는 모양: 첫 문단의 구역 설정 run 안) */
@@ -369,7 +414,10 @@ export async function docToHwpx(doc: Doc, now = new Date()): Promise<Uint8Array>
   const header = hb.build();
 
   const iso = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  // 그림 파일을 패키지 목록(content.hpf manifest)에 올린다
+  const binItems = hb.bins.map((b) => `<opf:item id="${b.id}" href="BinData/${b.file}" media-type="${b.mime}" isEmbeded="1"/>`).join('');
   const hpf = hpfTpl
+    .replace('</opf:manifest>', `${binItems}</opf:manifest>`)
     .replace(/<opf:title\/>|<opf:title>[\s\S]*?<\/opf:title>/, `<opf:title>${xmlEscape(doc.title)}</opf:title>`)
     .replace(/(<opf:meta name="(?:creator|lastsaveby)" content="text">)[^<]*/g, '$1HanWord')
     .replace(/(<opf:meta name="(?:CreatedDate|ModifiedDate)" content="text">)[^<]*/g, `$1${iso}`)
@@ -384,6 +432,8 @@ export async function docToHwpx(doc: Doc, now = new Date()): Promise<Uint8Array>
     'Contents/content.hpf': hpf,
     'Preview/PrvText.txt': plainText(doc.blocks).slice(0, 1024).replace(/\n/g, '\r\n'),
   };
+  // 그림 원본 (압축하지 않음 — 이미 압축된 형식)
+  for (const b of hb.bins) out.file(`BinData/${b.file}`, base64ToBytes2(b.data), { compression: 'STORE' });
   for (const name of Object.keys(zip.files)) {
     const entry = zip.files[name];
     if (entry.dir || name === 'mimetype') continue;

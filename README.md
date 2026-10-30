@@ -44,6 +44,8 @@ AI 가 마크다운으로 쓴 글을 HanWord 가 한글(.hwpx)·Word(.docx)로 �
 | 편집 용지 · 문단 모양 | **F7** 용지 방향·여백 · **Alt+T** 정렬·여백·첫 줄·간격·줄 간격 (한글과 같음) |
 | 차례 만들기 | / 메뉴 → 장 제목(Ⅰ.)·제목으로 차례, 본문은 새 쪽 |
 | 새 문서 | **Alt+N** (한글) · Ctrl+N 은 한글처럼 이어 누르는 키(P·H·T)의 시작, 그냥 두면 새 문서 |
+| 그림 | **그림** 버튼 · **Ctrl+N, I** · 붙여넣기 · 끌어다 놓기 — 본문(표 안이면 칸) 폭에 맞춤, 두 번 누르면 크기 바꾸기. WebP 는 PNG 로, 긴 변 2400px 넘는 사진은 줄여서 |
+| 사진대지 | **사진대지** 버튼 — 사진 여러 장을 표에 1~3장씩 + "사진 N. ○○" 설명 칸 |
 | 빈칸 채우기 | `○○` 자리가 노란색으로 표시됨 · **Tab** / Shift+Tab 으로 다음·이전 빈칸 선택 후 바로 입력 (한글 누름틀처럼) |
 | 표 합계 | 더할 칸과 합계 칸을 드래그 → **∑ 합계** 또는 **Ctrl+Shift+S** (한글 블록 합계). 합계 칸에 커서만 두고 눌러도 위쪽 숫자를 더함 |
 | 찾기·바꾸기 | **Ctrl+F** / **Ctrl+H** · Enter 다음, Shift+Enter 이전, 모두 바꾸기 |
@@ -119,7 +121,7 @@ powershell -ExecutionPolicy Bypass -File verify\windows\verify-in-office.ps1
 
 ## 호환성을 위해 지키는 규칙
 
-**편집기에는 양쪽에서 1:1 로 표현되는 기능만 둔다.** 현재: 글꼴, 크기, 자간, 굵게·기울임·밑줄·취소선, 글자색, 정렬, 제목 1–3, 목록, 표(가로·세로 병합, 열 너비, 칸 배경색, 칸 테두리), 문단 안 줄바꿈, 쪽 나누기, 머리말·꼬리말, 쪽 번호.
+**편집기에는 양쪽에서 1:1 로 표현되는 기능만 둔다.** 현재: 글꼴, 크기, 자간, 굵게·기울임·밑줄·취소선, 글자색, 정렬, 제목 1–3, 목록, 표(가로·세로 병합, 열 너비, 칸 배경색, 칸 테두리), 문단 안 줄바꿈, 쪽 나누기, 머리말·꼬리말, 쪽 번호, 그림(글자처럼 취급).
 
 | 항목 | 한글(HWPX) | Word(DOCX) | 처리 |
 |---|---|---|---|
@@ -135,6 +137,7 @@ powershell -ExecutionPolicy Bypass -File verify\windows\verify-in-office.ps1
 | 자간 | charPr `spacing` (글자 크기 대비 %) | `w:spacing` (twip) | 크기 × % 로 환산 |
 | 쪽 번호 | `hp:pageNum pos sideChar="-"` (쪽 번호 매기기) | 머리글/바닥글 문단의 `PAGE` 필드 + "- " " -" | 열 때 한글 머리말 안 `autoNum PAGE` 도 쪽 번호로 |
 | 머리말/꼬리말 | 첫 문단 구역 run 의 `hp:header`/`hp:footer` 컨트롤 | `w:headerReference`/`footerReference` (default) | 모든 쪽 같은 것 하나만 |
+| 그림 | `hp:pic`(treatAsChar) + `BinData/imageN` + content.hpf 목록 + `hh:binDataList` | `wp:inline` + `word/media` | 원본 바이트 그대로, 크기 mm |
 | 빈 문단 높이 | 문단 글자모양 기준 | 문단 기호 서식 기준 | 둘 다 같은 글자모양 지정 |
 
 HWPX 는 XML 을 처음부터 만들지 않는다. **한글이 직접 저장한 빈 문서**(`templates/blank.hwpx`)를 열어
