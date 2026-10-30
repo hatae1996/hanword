@@ -3,12 +3,14 @@
  * fromTiptap.ts 의 역방향. 기본값과 같은 값은 넣지 않아 편집기 문서를 깔끔하게 유지한다.
  */
 import { toDataUrl } from './image';
-import type { Doc, Paragraph, Table } from './types';
+import type { Doc, Memo, Paragraph, Table } from './types';
 import { defaultParaStyle } from './defaults';
 import { placeCells } from './table';
 import type { PMNode } from './fromTiptap';
 
 const mmToPx = (mm: number) => Math.round(((mm * 96) / 25.4) * 100) / 100;
+
+let memos = new Map<string, Memo>();
 
 function paragraph(p: Paragraph): PMNode {
   const d = defaultParaStyle(p.role);
@@ -44,6 +46,8 @@ function paragraph(p: Paragraph): PMNode {
     if (i.color) ts.color = i.color;
     if (i.spacingPct) ts.letterSpacing = `${i.spacingPct / 100}em`;
     if (Object.keys(ts).length) marks.push({ type: 'textStyle', attrs: ts });
+    const memo = i.memo ? memos.get(i.memo) : undefined;
+    if (memo) marks.push({ type: 'memo', attrs: { id: memo.id, text: memo.text, author: memo.author ?? '', date: memo.date ?? '' } });
     content.push({ type: 'text', text: i.text, ...(marks.length ? { marks } : {}) });
   }
   if (p.role === 'body') return { type: 'paragraph', attrs, content };
@@ -72,6 +76,7 @@ function table(t: Table): PMNode {
 }
 
 export function docToTiptap(doc: Doc): PMNode {
+  memos = new Map((doc.memos ?? []).map((m) => [m.id, m]));
   const content = doc.blocks.map((b) => (b.type === 'paragraph' ? paragraph(b) : table(b)));
   return { type: 'doc', content: content.length ? content : [{ type: 'paragraph' }] };
 }

@@ -54,6 +54,11 @@ function ok(label: string, cond: boolean, detail = '') {
 /** 편집기 JSON 에 없는 문서 단위 설정(머리말·쪽 번호)을 붙인다 — 앱의 currentDoc() 과 같음 */
 const extrasOf = (d: Doc) => ({ ...(d.header ? { header: d.header } : {}), ...(d.footer ? { footer: d.footer } : {}), ...(d.pageNumber ? { pageNumber: d.pageNumber } : {}) });
 
+function stripMemos(d: Doc): Doc {
+  const strip = (ps: any[]) => ps.map((p) => ({ ...p, inlines: p.inlines.map(({ memo: _m, ...i }: any) => i) }));
+  return { ...d, memos: undefined, blocks: d.blocks.map((b) => (b.type === 'paragraph' ? strip([b])[0] : { ...b, rows: b.rows.map((r) => r.map((c) => ({ ...c, blocks: strip(c.blocks) }))) })) };
+}
+
 for (const [name, json] of Object.entries(SAMPLES)) {
   const d0 = { ...tiptapToDoc(json as any, name), ...(SAMPLE_EXTRAS[name] ?? {}) };
 
@@ -71,7 +76,11 @@ for (const [name, json] of Object.entries(SAMPLES)) {
   same(`${name}: 연 문서 → 편집기 → 저장용 문서`, d0, { ...tiptapToDoc(docToTiptap(h.doc) as any, name, h.doc.page), ...extrasOf(h.doc) });
 
   // AI 연동: 문서 → 마크다운 → 문서 (AI 가 한글 문서를 읽고 다시 쓰는 경로)
-  same(`${name}: 문서 → 마크다운 → 문서`, d0, markdownToDoc(docToMarkdown(d0), nodeGenerateJSON).doc);
+  // (메모는 마크다운에 없으므로 메모를 뺀 문서와 비교)
+  same(`${name}: 문서 → 마크다운 → 문서`, stripMemos(d0), markdownToDoc(docToMarkdown(d0), nodeGenerateJSON).doc);
+  if (d0.memos?.length) {
+    ok(`${name}: 메모 ${d0.memos.length}개 (HWPX·DOCX 모두)`, h.doc.memos?.length === d0.memos.length && x.doc.memos?.length === d0.memos.length, `${h.doc.memos?.length} / ${x.doc.memos?.length}`);
+  }
 }
 
 // ── AI 가 쓴 마크다운 ─────────────────────────────────────

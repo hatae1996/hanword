@@ -36,6 +36,8 @@ import { polishDialog } from './ui/polishDialog';
 import { ruleModes } from './ui/polishModes';
 import { aiModes } from './ui/aiModes';
 import { applyTexts, replaceRange, replaceWithItems, selectedBlocks } from './editor/polish';
+import { addMemo, gotoNextMemo, listMemos, memoAt, updateMemo, wordRange } from './editor/memo';
+import { memoDialog } from './ui/memoDialog';
 import { appVersion, checkForUpdates } from './updater';
 import { clearRecovery, loadRecovery, setupAutosave } from './autosave';
 import { addRecent, recentFiles, removeRecent, whenText } from './recent';
@@ -88,6 +90,7 @@ const editor = new Editor({
   onUpdate: () => {
     if (!loading) markDirty(true);
     refresh();
+    showMemoCount();
   },
   onSelectionUpdate: () => refresh(),
 });
@@ -150,7 +153,51 @@ const commands: Record<string, () => void> = {
   image: () => void pickAndInsertImages(),
   'photo-sheet': () => void makePhotoSheet(),
   polish: () => void openPolish(),
+  memo: () => void memoCommand(),
 };
+
+// ── 메모 (한글 Ctrl+N, M) ────────────────────────────────
+async function memoCommand() {
+  const cur = memoAt(editor.state);
+  if (cur) return editMemo(cur.attrs.id);
+  const range = wordRange(editor.state);
+  if (!range) return toast('메모를 달 글자를 선택하거나 낱말 안에 커서를 두세요', true);
+  const anchor = editor.state.doc.textBetween(range.from, range.to, ' ');
+  const r = await memoDialog({ title: '메모 넣기', anchor });
+  if (!r || r.action !== 'save') return editor.commands.focus();
+  addMemo(editor, range, r.text, r.author);
+  editor.commands.focus();
+  toast('메모를 달았습니다 — 한글·Word 메모로 저장됩니다');
+}
+async function editMemo(id: string) {
+  const m = listMemos(editor.state).find((x) => x.attrs.id === id);
+  if (!m) return;
+  const anchor = editor.state.doc.textBetween(m.from, m.to, ' ');
+  const r = await memoDialog({ title: '메모 고치기', text: m.attrs.text, author: m.attrs.author, anchor, canDelete: true });
+  if (!r) return editor.commands.focus();
+  if (r.action === 'delete') {
+    updateMemo(editor, id, null);
+    toast('메모를 지웠습니다 (글자는 그대로)');
+  } else updateMemo(editor, id, { text: r.text, author: r.author });
+  editor.commands.focus();
+}
+// 메모 글자를 누르면 고치기 (드래그로 고를 때는 제외)
+$('editor').addEventListener('click', (e) => {
+  const el = (e.target as HTMLElement).closest?.('.hw-memo') as HTMLElement | null;
+  if (!el || !(window.getSelection()?.isCollapsed ?? true)) return;
+  const id = el.getAttribute('data-memo-id');
+  if (id) void editMemo(id);
+});
+function showMemoCount() {
+  const n = listMemos(editor.state).length;
+  const b = $<HTMLButtonElement>('stat-memo');
+  b.hidden = n === 0;
+  b.textContent = `메모 ${n}개`;
+}
+$('stat-memo').addEventListener('click', () => {
+  const m = gotoNextMemo(editor);
+  if (m) toast(`메모${m.attrs.author ? ` (${m.attrs.author})` : ''}: ${m.attrs.text}`);
+});
 
 // ── 문장 다듬기 (공문체·개조식, AI) ──────────────────────
 async function openPolish(first?: string) {
@@ -750,6 +797,7 @@ const chordKeys: Record<string, () => void> = {
   KeyP: () => void editPageNumber(),
   KeyH: () => void editHeaderFooter(),
   KeyT: () => commands.table(),
+  KeyM: () => void memoCommand(),
   KeyN: () => void newDoc(),
 };
 

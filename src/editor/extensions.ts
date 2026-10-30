@@ -3,6 +3,7 @@
  * 양쪽 포맷에 1:1 대응이 없는 기능(코드 블록, 인용, 가로줄, 링크)은 끈다.
  */
 import StarterKit from '@tiptap/starter-kit';
+import { Memo } from './memo';
 import { Color, FontFamily, FontSize, TextStyle } from '@tiptap/extension-text-style';
 import TextAlign from '@tiptap/extension-text-align';
 import { TableKit } from '@tiptap/extension-table';
@@ -30,5 +31,6 @@ export function schemaExtensions(opts: { resizableTables?: boolean; image?: Para
     ParagraphFormat,
     LetterSpacing,
     ImageNode.configure(opts.image ?? {}),
+    Memo,
   ];
 }

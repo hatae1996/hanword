@@ -13,7 +13,7 @@
  *   - linesegarray(줄 배치 캐시)는 생략 → 한글이 열 때 다시 계산한다.
  */
 import JSZip from 'jszip';
-import type { Align, BorderLine, CellBorders, Doc, ImageRun, Paragraph, ParaRole, ParaStyle, Table, TableCell } from '../model/types';
+import type { Align, BorderLine, CellBorders, Doc, ImageRun, Memo, Paragraph, ParaRole, ParaStyle, Table, TableCell } from '../model/types';
 import { DEFAULT_BORDER, cleanBorders, resolveEdges } from '../model/borders';
 import { TABLE_DEFAULTS, defaultParaStyle } from '../model/defaults';
 import { maxSizePt, plainText, resolveRun, runKey, xmlEscape, type ResolvedRun } from '../model/resolve';
@@ -238,19 +238,81 @@ function paraPrXml(id: number, { style: s, keepNext }: ParaKey): string {
   );
 }
 
+/** 한글 메모 필드 번호 (컨트롤 id "%%me" 를 숫자로) */
+const MEMO_FIELD_ID = 0x25256d65;
+/** 한글이 읽는 메모 시각: UTC "2026-10-30T07:04:48Z" (다른 모양이면 1601년이 됨) */
+const memoTime = (iso?: string) => {
+  const d = iso ? new Date(iso) : new Date();
+  return (Number.isNaN(d.getTime()) ? new Date() : d).toISOString().replace(/\.\d{3}Z$/, 'Z');
+};
+/** 문단의 첫 글자에 달린 메모 (메모가 다음 문단까지 이어지는지 볼 때) */
+export function firstMemo(p: Paragraph | undefined): string | undefined {
+  const i = p?.inlines.find((x) => x.kind === 'text' && x.text);
+  return i?.kind === 'text' ? i.memo : undefined;
+}
+
 /** 본문(section0.xml) 생성기 */
 class SectionBuilder {
   private nextParaId = 0;
   private nextObjId = 1;
+  /** 메모: id → 내용 / 나온 순서(1부터) / 지금 열려 있는 메모 */
+  private memoInfo = new Map<string, Memo>();
+  private memoOrder: { id: string; n: number }[] = [];
+  private openMemo: string | null = null;
 
   constructor(private readonly hb: HeaderBuilder) {}
 
-  paragraph(p: Paragraph, prefixRun = ''): string {
+  setMemos(memos: Memo[] | undefined) {
+    for (const m of memos ?? []) this.memoInfo.set(m.id, m);
+  }
+
+  /** 메모 시작: 한글이 메모 넣기로 만드는 MEMO 필드 (python-hwpx 가 한글로 확인한 모양) */
+  private memoBegin(id: string, charPr: number): string {
+    const n = this.memoOrder.length + 1;
+    this.memoOrder.push({ id, n });
+    const m = this.memoInfo.get(id) ?? { id, text: '' };
+    const first = m.text.split('\n')[0] ?? '';
+    return (
+      `<hp:run charPrIDRef="${charPr}"><hp:ctrl><hp:fieldBegin id="${1500000000 + n}" type="MEMO" name="" editable="1" dirty="0" zorder="${n}" fieldid="${MEMO_FIELD_ID}" metaTag="">` +
+      `<hp:parameters cnt="5" name=""><hp:stringParam name="ID">${1600000000 + n}</hp:stringParam><hp:integerParam name="Number">${n}</hp:integerParam>` +
+      `<hp:stringParam name="CreateDateTime">${memoTime(m.date)}</hp:stringParam><hp:stringParam name="Author">${xmlEscape(m.author ?? '')}</hp:stringParam>` +
+      `<hp:stringParam name="MemoShapeIDRef">65535</hp:stringParam></hp:parameters>` +
+      `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">` +
+      `<hp:p id="0" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"><hp:t>${xmlEscape(first)}</hp:t></hp:run></hp:p></hp:subList>` +
+      `</hp:fieldBegin></hp:ctrl></hp:run>`
+    );
+  }
+  private memoEnd(charPr: number): string {
+    const n = this.memoOrder[this.memoOrder.length - 1].n;
+    return `<hp:run charPrIDRef="${charPr}"><hp:ctrl><hp:fieldEnd beginIDRef="${1500000000 + n}" fieldid="${MEMO_FIELD_ID}"/></hp:ctrl></hp:run>`;
+  }
+  /** 구역 끝의 메모 내용 모음 */
+  memoGroup(): string {
+    if (!this.memoOrder.length) return '';
+    const memos = this.memoOrder.map(({ id, n }) => {
+      const m = this.memoInfo.get(id) ?? { id, text: '' };
+      const paras = m.text.split('\n').map((line) =>
+        `<hp:p id="${this.nextParaId++}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${line ? `<hp:t>${xmlEscape(line)}</hp:t>` : '<hp:t/>'}</hp:run></hp:p>`,
+      );
+      return `<hp:memo id="${1600000000 + n}"><hp:paraList>${paras.join('')}</hp:paraList></hp:memo>`;
+    });
+    return `<hp:memogroup>${memos.join('')}</hp:memogroup>`;
+  }
+
+  /** @param nextMemo 다음 문단 첫 글자의 메모 — 같으면 메모를 닫지 않고 이어 간다 */
+  paragraph(p: Paragraph, prefixRun = '', nextMemo?: string): string {
     const ppr = this.hb.paraPr(p.style, p.role !== 'body');
     const styleId = this.hb.headingStyle(p.role);
     let runs = '';
     let lastChar = this.hb.charPr(resolveRun(p));
     for (const i of p.inlines) {
+      // 메모 경계 (줄바꿈·그림은 앞 글자의 메모를 이어 간다)
+      const want = i.kind === 'text' ? (i.text ? (i.memo ?? null) : this.openMemo) : this.openMemo;
+      if (want !== this.openMemo) {
+        if (this.openMemo) runs += this.memoEnd(lastChar);
+        if (want) runs += this.memoBegin(want, lastChar);
+        this.openMemo = want;
+      }
       if (i.kind === 'break') {
         runs += `<hp:run charPrIDRef="${lastChar}"><hp:t><hp:lineBreak/></hp:t></hp:run>`;
         continue;
@@ -262,6 +324,10 @@ class SectionBuilder {
       if (!i.text) continue;
       lastChar = this.hb.charPr(resolveRun(p, i));
       runs += `<hp:run charPrIDRef="${lastChar}"><hp:t>${xmlEscape(i.text)}</hp:t></hp:run>`;
+    }
+    if (this.openMemo && this.openMemo !== nextMemo) {
+      runs += this.memoEnd(lastChar);
+      this.openMemo = null;
     }
     // 빈 문단도 글자 크기만큼 높이를 갖도록 해당 글자모양의 빈 run 을 둔다
     if (!runs) runs = `<hp:run charPrIDRef="${lastChar}"><hp:t/></hp:run>`;
@@ -394,6 +460,7 @@ export async function docToHwpx(doc: Doc, now = new Date()): Promise<Uint8Array>
   if (!rootOpen || !secRunTpl) throw new Error('템플릿 section0.xml 구조를 읽을 수 없습니다');
   const hb = new HeaderBuilder(headerTpl);
   const sb = new SectionBuilder(hb);
+  sb.setMemos(doc.memos);
   // 쪽 번호(한글 "쪽 번호 매기기")·머리말·꼬리말은 첫 문단의 구역 설정 run 끝에 붙는다
   let extra = '';
   if (doc.header?.length) extra += sb.headerFooter('header', doc.header, doc);
@@ -406,11 +473,12 @@ export async function docToHwpx(doc: Doc, now = new Date()): Promise<Uint8Array>
   const body = doc.blocks
     .map((b, i) => {
       const prefix = i === 0 ? secRun : '';
-      return b.type === 'paragraph' ? sb.paragraph(b, prefix) : sb.table(b, prefix);
+      const next = doc.blocks[i + 1];
+      return b.type === 'paragraph' ? sb.paragraph(b, prefix, next?.type === 'paragraph' ? firstMemo(next) : undefined) : sb.table(b, prefix);
     })
     .join('');
 
-  const section = `${rootOpen}${body}</hs:sec>`;
+  const section = `${rootOpen}${body}${sb.memoGroup()}</hs:sec>`;
   const header = hb.build();
 
   const iso = now.toISOString().replace(/\.\d{3}Z$/, 'Z');

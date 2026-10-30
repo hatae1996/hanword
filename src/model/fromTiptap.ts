@@ -1,7 +1,7 @@
 /**
  * TipTap(ProseMirror) JSON → 공통 문서 모델(Doc)
  */
-import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaRole, RunStyle, Table, TableCell } from './types';
+import type { Align, Block, Doc, Inline, Memo, PageSetup, Paragraph, ParaRole, RunStyle, Table, TableCell } from './types';
 import { DEFAULT_PAGE, LIST_INDENT_MM, contentWidthMm, defaultParaStyle } from './defaults';
 import { normalizeWidths, placeCells } from './table';
 import { cleanBorders, resolveEdges } from './borders';
@@ -18,14 +18,19 @@ export type PMNode = {
 
 /** 크기 없이 들어온 그림을 맞출 본문 폭 (tiptapToDoc 이 정한다) */
 let contentWidth = 150;
+/** 편집기 메모 표시(memo 마크)에서 모은 메모 */
+let memoBag = new Map<string, Memo>();
 
 export function tiptapToDoc(json: PMNode, title = '문서', pageSetup: PageSetup = DEFAULT_PAGE): Doc {
   const page = { ...pageSetup };
   contentWidth = contentWidthMm(page);
+  memoBag = new Map();
   const blocks: Block[] = [];
   for (const node of json.content ?? []) convertBlock(node, blocks, contentWidthMm(page));
   if (!blocks.length || blocks[blocks.length - 1].type === 'table') blocks.push(emptyParagraph());
-  return { title, page, blocks };
+  const doc: Doc = { title, page, blocks };
+  if (memoBag.size) doc.memos = [...memoBag.values()];
+  return doc;
 }
 
 function emptyParagraph(): Paragraph {
@@ -168,10 +173,19 @@ function cleanFont(v: unknown): string | undefined {
   return v.split(',')[0].replace(/["']/g, '').trim() || undefined;
 }
 
-function marksToStyle(marks: PMNode['marks']): RunStyle {
-  const s: RunStyle = {};
+function marksToStyle(marks: PMNode['marks']): RunStyle & { memo?: string } {
+  const s: RunStyle & { memo?: string } = {};
   for (const m of marks ?? []) {
-    if (m.type === 'bold') s.bold = true;
+    if (m.type === 'memo' && m.attrs?.id) {
+      const id = String(m.attrs.id);
+      s.memo = id;
+      if (!memoBag.has(id)) {
+        const memo: Memo = { id, text: String(m.attrs.text ?? '') };
+        if (m.attrs.author) memo.author = String(m.attrs.author);
+        if (m.attrs.date) memo.date = String(m.attrs.date);
+        memoBag.set(id, memo);
+      }
+    } else if (m.type === 'bold') s.bold = true;
     else if (m.type === 'italic') s.italic = true;
     else if (m.type === 'underline') s.underline = true;
     else if (m.type === 'strike') s.strike = true;

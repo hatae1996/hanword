@@ -20,6 +20,7 @@ const img = (name: string, widthMm: number, heightMm: number): N => ({
   attrs: { src: `data:image/${name.endsWith('.png') ? 'png' : 'jpeg'};base64,${fixture(name).toString('base64')}`, widthMm, heightMm },
 });
 const doc = (...content: N[]): N => ({ type: 'doc', content });
+const memo = (id: string, text: string, author = ''): N => ({ type: 'memo', attrs: { id, text, author, date: '2026-10-30T07:00:00Z' } });
 import type { Doc } from '../src/model/types';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -136,6 +137,17 @@ export const SAMPLES: Record<string, N> = {
         ),
         row(cell('사진 1. 이관 전 서고'), cell('사진 2. 이관 후 서가')),
       ],
+    },
+    p([t('끝')]),
+  ),
+  // 메모: 문단 안 / 두 문단에 걸침 / 표 칸 안 / 여러 줄 메모
+  '07-메모': doc(
+    p([t('이관 대상은 '), t('기록관 소장 기록물', memo('m1', '수량 확인 필요\n담당: 김주무관', '재현')), t('이다.')]),
+    p([t('첫째 문단 끝에서 ', memo('m2', '두 문단에 걸친 메모')), ]),
+    p([t('둘째 문단 처음까지', memo('m2', '두 문단에 걸친 메모')), t(' 이어진다.')]),
+    {
+      type: 'table',
+      content: [row(cell('구분'), { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null }, content: [p([t('수량 '), t('120개', B, memo('m3', '재확인 (10/31)'))])] })],
     },
     p([t('끝')]),
   ),

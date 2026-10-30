@@ -5,7 +5,7 @@
  * 지원하지 않는 요소(그림, 도형, 수식, 머리말/꼬리말, 각주 …)는 건너뛰고 warnings 에 남긴다.
  */
 import JSZip from 'jszip';
-import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaStyle, Table, TableCell, TextRun, CellBorders, LineStyle, PageNumber, ImageRun } from '../model/types';
+import type { Memo, Align, Block, Doc, Inline, PageSetup, Paragraph, ParaStyle, Table, TableCell, TextRun, CellBorders, LineStyle, PageNumber, ImageRun } from '../model/types';
 import { bytesToBase64, sniffMime } from '../model/image';
 import { cleanBorders } from '../model/borders';
 import { DEFAULT_PAGE, contentWidthMm, defaultParaStyle } from '../model/defaults';
@@ -53,6 +53,38 @@ class Reader {
   /** borderFill id → 칸 배경색·테두리 */
   fills = new Map<string, { bg?: string; borders?: CellBorders }>();
   warnings = new Set<string>();
+  /** 메모: 메모 id → 내용, 필드 id → 메모 id, 지금 열린 메모 */
+  memos = new Map<string, Memo>();
+  memoText = new Map<string, string>();
+  memoField = new Map<string, string>();
+  openMemo: string | null = null;
+
+  /** 구역 끝 hp:memogroup 의 메모 글 */
+  readMemoGroup(sec: El) {
+    for (const g of kids(sec, 'memogroup'))
+      for (const m of kids(g, 'memo')) {
+        const paras = kids(kid(m, 'paraList'), 'p').map((p) => descendants(p, 't').map((t) => t.textContent ?? '').join(''));
+        this.memoText.set(attr(m, 'id') ?? '', paras.join('\n'));
+      }
+  }
+
+  /** MEMO 필드 시작 → 메모 열기 */
+  readMemoField(fb: El) {
+    const params = new Map(kids(kid(fb, 'parameters')).map((x) => [attr(x, 'name') ?? '', x.textContent ?? '']));
+    const memoId = params.get('ID') || attr(fb, 'id') || String(this.memos.size + 1);
+    const id = `hm${memoId}`;
+    if (!this.memos.has(id)) {
+      const sub = kids(kid(fb, 'subList'), 'p').map((p) => descendants(p, 't').map((t) => t.textContent ?? '').join('')).join('\n');
+      const memo: Memo = { id, text: this.memoText.get(memoId) ?? sub };
+      const author = params.get('Author');
+      if (author) memo.author = author;
+      const date = params.get('CreateDateTime');
+      if (date && !date.startsWith('1601')) memo.date = date;
+      this.memos.set(id, memo);
+    }
+    this.memoField.set(attr(fb, 'id') ?? '', id);
+    this.openMemo = id;
+  }
 
   readHeader(head: Document) {
     const root = head.documentElement;
@@ -210,7 +242,7 @@ class Reader {
       const style = ch ? { bold: ch.bold, italic: ch.italic, underline: ch.underline, strike: ch.strike, sizePt: ch.sizePt, color: ch.color, font: ch.font, spacingPct: ch.spacingPct } : {};
       for (const c of kids(run)) {
         const name = c.localName;
-        if (name === 't') this.readText(c, style, inlines);
+        if (name === 't') this.readText(c, this.openMemo ? { ...style, memo: this.openMemo } : style, inlines);
         else if (name === 'pic') this.readPicture(c, inlines);
         else if (name === 'tbl') {
           flush(false);
@@ -223,7 +255,12 @@ class Reader {
         } else if (name === 'ctrl') {
           for (const cc of kids(c)) {
             const n = cc.localName;
-            if (n === 'header' || n === 'footer') this.readHeaderFooter(cc, n);
+            if (n === 'fieldBegin' && attr(cc, 'type') === 'MEMO') this.readMemoField(cc);
+            else if (n === 'fieldEnd' && this.memoField.has(attr(cc, 'beginIDRef') ?? '')) {
+              if (this.memoField.get(attr(cc, 'beginIDRef') ?? '') === this.openMemo) this.openMemo = null;
+            } else if (n === 'fieldEnd') {
+              /* 다른 필드의 끝 */
+            } else if (n === 'header' || n === 'footer') this.readHeaderFooter(cc, n);
             else if (n === 'pageNum') {
               const pos = (attr(cc, 'pos') ?? 'BOTTOM_CENTER').toUpperCase();
               if (pos !== 'NONE') {
@@ -364,6 +401,7 @@ export async function readHwpx(bytes: Uint8Array | ArrayBuffer, title = '문서'
     const f = zip.file(paths[i]);
     if (!f) continue;
     const sec = parseXml(await f.async('string'));
+    r.readMemoGroup(sec.documentElement);
     if (i === 0) page = r.readPage(sec);
     else r.warnings.add('여러 구역(첫 구역의 쪽 설정으로 통일)');
     const width = contentWidthMm(page);
@@ -380,5 +418,10 @@ export async function readHwpx(bytes: Uint8Array | ArrayBuffer, title = '문서'
   if (r.header) doc.header = r.header;
   if (r.footer) doc.footer = r.footer;
   if (r.pageNumber) doc.pageNumber = r.pageNumber;
+  // 본문에 실제로 달린 메모만 (나온 순서)
+  const used = new Set<string>();
+  const walk = (ps: Paragraph[]) => ps.forEach((p) => p.inlines.forEach((i) => i.kind === 'text' && i.memo && used.add(i.memo)));
+  for (const b of blocks) b.type === 'paragraph' ? walk([b]) : b.rows.forEach((row) => row.forEach((c) => walk(c.blocks)));
+  if (used.size) doc.memos = [...used].map((id) => r.memos.get(id)!).filter(Boolean);
   return { doc, warnings: [...r.warnings] };
 }

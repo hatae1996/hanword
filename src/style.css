@@ -192,6 +192,12 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 /* ── 빈칸(○○) · 찾기 표시 (화면에서만) ── */
 .ProseMirror .hw-blank { background: #FFF2A8; border-radius: 2px; box-shadow: 0 0 0 1px #F2D64B inset; }
 .ProseMirror .hw-find { background: #FFE08A; border-radius: 2px; }
+/* 메모 달린 글자 (화면에서만 — 한글처럼 인쇄되지 않음) */
+.ProseMirror .hw-memo { background: #FCE8C8; border-bottom: 2px solid #E8A33D; cursor: pointer; }
+.ProseMirror .hw-memo:hover { background: #F9D9A6; }
+.statusbar .blanks.memo { border-color: #E8A33D; background: #FCE8C8; color: #6b3d00; }
+.hw-dialog-input.hw-memo-text { height: auto; min-height: 84px; line-height: 1.5; padding: 6px 8px; resize: vertical; font: 13.5px/1.5 var(--font-ui); }
+.btn.danger { color: var(--danger); margin-right: auto; }
 .ProseMirror .hw-find-current { background: #FF9F43; color: #000; }
 
 /* ── 찾기 막대 ── */
@@ -366,7 +372,7 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
   .ProseMirror { min-height: 0 !important; }
   .ProseMirror .hw-page-break { break-before: page; margin-top: 0 !important; }
   .ProseMirror .hw-page-break::before, .ProseMirror .hw-page-break::after { content: none !important; display: none !important; }
-  .ProseMirror .hw-blank, .ProseMirror .hw-find, .ProseMirror .hw-find-current { background: none !important; box-shadow: none !important; }
+  .ProseMirror .hw-blank, .ProseMirror .hw-find, .ProseMirror .hw-find-current, .ProseMirror .hw-memo { background: none !important; box-shadow: none !important; border-bottom: none !important; }
   .ProseMirror .selectedCell::after, .ProseMirror .column-resize-handle, .ProseMirror-gapcursor { display: none !important; }
   .ProseMirror img.ProseMirror-selectednode { outline: none !important; }
   .ProseMirror ::selection { background: transparent; }

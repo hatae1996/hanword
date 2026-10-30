@@ -25,10 +25,11 @@ export function cleanRun(p: Paragraph, r: TextRun): TextRun {
   if (r.color && r.color.toUpperCase() !== DEFAULT_COLOR) out.color = r.color.toUpperCase();
   if (r.font && r.font !== DEFAULT_FONT) out.font = r.font;
   if (r.spacingPct && Math.round(r.spacingPct)) out.spacingPct = Math.max(-50, Math.min(50, Math.round(r.spacingPct)));
+  if (r.memo) out.memo = r.memo;
   return out;
 }
 
-const styleKey = (r: TextRun) => JSON.stringify([r.bold, r.italic, r.underline, r.strike, r.sizePt, r.color, r.font, r.spacingPct]);
+const styleKey = (r: TextRun) => JSON.stringify([r.bold, r.italic, r.underline, r.strike, r.sizePt, r.color, r.font, r.spacingPct, r.memo]);
 
 function mergeInlines(list: Inline[]): Inline[] {
   const out: Inline[] = [];
@@ -95,5 +96,17 @@ export function canonical(doc: Doc): string {
     b.type === 'paragraph' ? para(b) : { table: true, colWidthsMm: b.colWidthsMm.map(r1), rows: resolveEdges(b).rows.map((r) => r.map(cell)) };
   const page = Object.fromEntries(Object.entries(doc.page).map(([k, v]) => [k, r1(v)]));
   const hf = (ps?: Paragraph[]) => (ps?.length ? ps.map(para) : null);
-  return JSON.stringify({ page, header: hf(doc.header), footer: hf(doc.footer), pageNumber: doc.pageNumber ?? null, blocks: doc.blocks.map(block) }, null, 1);
+  const out = { page, header: hf(doc.header), footer: hf(doc.footer), pageNumber: doc.pageNumber ?? null, blocks: doc.blocks.map(block) };
+  // 메모: 파일마다 id 가 다르므로 나온 순서 번호로 바꿔 비교
+  const order = new Map<string, number>();
+  const json = JSON.stringify(out, (k, v) => {
+    if (k === 'memo' && typeof v === 'string') {
+      if (!order.has(v)) order.set(v, order.size + 1);
+      return order.get(v);
+    }
+    return v;
+  }, 1);
+  const byId = new Map((doc.memos ?? []).map((m) => [m.id, m]));
+  const memos = [...order.keys()].map((id) => ({ text: byId.get(id)?.text ?? null, author: byId.get(id)?.author || null }));
+  return memos.length ? `${json}\n${JSON.stringify(memos, null, 1)}` : json;
 }

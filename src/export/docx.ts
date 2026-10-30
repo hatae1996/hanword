@@ -7,6 +7,9 @@
 import {
   AlignmentType,
   BorderStyle,
+  CommentRangeEnd,
+  CommentRangeStart,
+  CommentReference,
   Document,
   Footer,
   Header,
@@ -24,9 +27,12 @@ import {
   TextRun as DTextRun,
   VerticalAlign,
   WidthType,
+  type ICommentOptions,
   type IParagraphOptions,
+  type ParagraphChild,
 } from 'docx';
-import type { Align, BorderLine, Doc, Paragraph, Table } from '../model/types';
+import type { Align, BorderLine, Doc, Memo, Paragraph, Table } from '../model/types';
+import { firstMemo } from './hwpx';
 import { resolveEdges } from '../model/borders';
 import { IMAGE_EXT, base64ToBytes } from '../model/image';
 import { DEFAULT_FONT, DEFAULT_SIZE_PT, ROLE_PARA, ROLE_RUN, TABLE_DEFAULTS } from '../model/defaults';
@@ -55,9 +61,46 @@ function headingStyle(role: 'h1' | 'h2' | 'h3', level: number) {
 
 const mmToPx = (mm: number) => Math.max(1, Math.round((mm * 96) / 25.4));
 
-function paragraph(p: Paragraph): DParagraph {
-  const children: (DTextRun | ImageRun)[] = [];
+/** 메모 → Word 메모(comment): 글자 범위 시작·끝 + 메모 표시 */
+const memo = {
+  info: new Map<string, Memo>(),
+  open: null as string | null,
+  num: 0,
+  comments: [] as ICommentOptions[],
+  reset(memos: Memo[] | undefined) {
+    this.info = new Map((memos ?? []).map((m) => [m.id, m]));
+    this.open = null;
+    this.num = 0;
+    this.comments = [];
+  },
+  begin(id: string, out: ParagraphChild[]) {
+    const m = this.info.get(id) ?? { id, text: '' };
+    const n = this.num++;
+    const date = m.date ? new Date(m.date) : undefined;
+    this.comments.push({
+      id: n,
+      author: m.author || 'HanWord',
+      initials: (m.author || 'HW').slice(0, 2),
+      ...(date && !Number.isNaN(date.getTime()) ? { date } : {}),
+      children: m.text.split('\n').map((line) => new DParagraph({ children: [new DTextRun(cleanText(line))] })),
+    });
+    out.push(new CommentRangeStart(n));
+  },
+  end(out: ParagraphChild[]) {
+    const n = this.num - 1;
+    out.push(new CommentRangeEnd(n), new DTextRun({ children: [new CommentReference(n)] }));
+  },
+};
+
+function paragraph(p: Paragraph, nextMemo?: string): DParagraph {
+  const children: ParagraphChild[] = [];
   for (const i of p.inlines) {
+    const want = i.kind === 'text' ? (i.text ? (i.memo ?? null) : memo.open) : memo.open;
+    if (want !== memo.open) {
+      if (memo.open) memo.end(children);
+      if (want) memo.begin(want, children);
+      memo.open = want;
+    }
     if (i.kind === 'break') {
       children.push(new DTextRun({ break: 1 }));
       continue;
@@ -82,6 +125,10 @@ function paragraph(p: Paragraph): DParagraph {
         characterSpacing: r.spacing ? Math.round(r.sizePt * 20 * (r.spacing / 100)) : undefined,
       }),
     );
+  }
+  if (memo.open && memo.open !== nextMemo) {
+    memo.end(children);
+    memo.open = null;
   }
   // 빈 문단도 해당 글자 크기의 높이를 갖도록 문단 기호 서식을 지정
   const empty = resolveRun(p);
@@ -122,8 +169,8 @@ function pageNumberParagraph(pn: NonNullable<Doc['pageNumber']>): DParagraph {
 
 function headersFooters(doc: Doc) {
   const pn = doc.pageNumber;
-  const top = [...(doc.header ?? []).map(paragraph), ...(pn && pn.pos.startsWith('top') ? [pageNumberParagraph(pn)] : [])];
-  const bottom = [...(doc.footer ?? []).map(paragraph), ...(pn && pn.pos.startsWith('bottom') ? [pageNumberParagraph(pn)] : [])];
+  const top = [...(doc.header ?? []).map((x) => paragraph(x)), ...(pn && pn.pos.startsWith('top') ? [pageNumberParagraph(pn)] : [])];
+  const bottom = [...(doc.footer ?? []).map((x) => paragraph(x)), ...(pn && pn.pos.startsWith('bottom') ? [pageNumberParagraph(pn)] : [])];
   return {
     ...(top.length ? { headers: { default: new Header({ children: top }) } } : {}),
     ...(bottom.length ? { footers: { default: new Footer({ children: bottom }) } } : {}),
@@ -148,7 +195,7 @@ function table(table: Table): DTable {
         children: row.map((pc) => {
           const width = colTwips.slice(pc.col, pc.col + pc.colspan).reduce((a, b) => a + b, 0);
           return new DTableCell({
-            children: pc.cell.blocks.map(paragraph),
+            children: pc.cell.blocks.map((x) => paragraph(x)),
             columnSpan: pc.colspan > 1 ? pc.colspan : undefined,
             rowSpan: pc.rowspan > 1 ? pc.rowspan : undefined,
             width: { size: width, type: WidthType.DXA },
@@ -178,9 +225,15 @@ function table(table: Table): DTable {
 
 export async function docToDocx(doc: Doc): Promise<Uint8Array> {
   const pg = pageToWord(doc.page);
+  memo.reset(doc.memos);
+  const children = doc.blocks.map((b, i) => {
+    const next = doc.blocks[i + 1];
+    return b.type === 'paragraph' ? paragraph(b, next?.type === 'paragraph' ? firstMemo(next) : undefined) : table(b);
+  });
   const document = new Document({
     creator: 'HanWord',
     title: doc.title,
+    ...(memo.comments.length ? { comments: { children: memo.comments } } : {}),
     compatibility: {
       version: 15, // Word 2013+ 모드 (호환 모드 표시가 뜨지 않음)
       // 양쪽 정렬 문단에서 Shift+Enter 로 끊은 줄을 Word 는 양끝으로 늘리지만 한글은 늘리지 않는다 → 한글처럼
@@ -206,7 +259,7 @@ export async function docToDocx(doc: Doc): Promise<Uint8Array> {
           },
         },
         ...headersFooters(doc),
-        children: doc.blocks.map((b) => (b.type === 'paragraph' ? paragraph(b) : table(b))),
+        children,
       },
     ],
   });

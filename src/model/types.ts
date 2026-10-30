@@ -26,6 +26,16 @@ export interface RunStyle {
 export interface TextRun extends RunStyle {
   kind: 'text';
   text: string;
+  /** 이 글자에 달린 메모 id (Doc.memos) — 한글 메모(MEMO 필드) ↔ Word 메모(comment) */
+  memo?: string;
+}
+/** 메모 — 한글 hp:memogroup + MEMO 필드 ↔ Word comments.xml */
+export interface Memo {
+  id: string;
+  text: string;
+  author?: string;
+  /** ISO 8601 */
+  date?: string;
 }
 
 /** 문단 안 줄바꿈 (Shift+Enter) */
@@ -138,4 +148,6 @@ export interface Doc {
   header?: Paragraph[];
   footer?: Paragraph[];
   pageNumber?: PageNumber;
+  /** 메모 (본문 글자의 memo 가 가리킴) */
+  memos?: Memo[];
 }

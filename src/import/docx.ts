@@ -6,7 +6,7 @@
  * 그림·도형·머리말/꼬리말·각주 등은 건너뛰고 warnings 에 남긴다.
  */
 import JSZip from 'jszip';
-import type { Align, Block, BorderLine, CellBorders, Doc, ImageRun, Inline, PageSetup, Paragraph, ParaRole, TableCell, TextRun } from '../model/types';
+import type { Memo, Align, Block, BorderLine, CellBorders, Doc, ImageRun, Inline, PageSetup, Paragraph, ParaRole, TableCell, TextRun } from '../model/types';
 import { bytesToBase64, sniffMime } from '../model/image';
 import { cleanBorders } from '../model/borders';
 import { DEFAULT_PAGE, contentWidthMm, defaultParaStyle } from '../model/defaults';
@@ -209,6 +209,9 @@ class Reader {
   docP: PProps = {};
   numbering = new Numbering();
   warnings = new Set<string>();
+  /** Word 메모: comments.xml id → 메모, 지금 열린 메모 */
+  comments = new Map<string, Memo>();
+  openMemo: string | null = null;
   /** "같은 스타일 문단 사이 간격 무시"(contextualSpacing) 처리를 위한 직전 문단 */
   private prev?: { para: Paragraph; styleId?: string; contextual: boolean };
   /** 본문 관계(rId → 파일)와 미리 읽은 그림 */
@@ -350,6 +353,14 @@ class Reader {
           this.readRuns(c, baseR, out); break;
         case 'sdt': this.readRuns(kid(c, 'sdtContent') ?? c, baseR, out); break;
         case 'del': case 'moveFrom': break; // 변경 추적에서 삭제된 글자는 버림
+        case 'commentRangeStart': {
+          const id = attr(c, 'id') ?? '';
+          if (this.comments.has(id)) this.openMemo = `wc${id}`;
+          break;
+        }
+        case 'commentRangeEnd':
+          if (this.openMemo === `wc${attr(c, 'id') ?? ''}`) this.openMemo = null;
+          break;
       }
     }
   }
@@ -359,7 +370,8 @@ class Reader {
     const rStyle = this.chain(attr(kid(rPr, 'rStyle'), 'val') ?? undefined);
     const rp = merge<RProps>(baseR, rStyle.r, readRPr(rPr));
     const style = { bold: rp.bold, italic: rp.italic, underline: rp.underline, strike: rp.strike, sizePt: rp.sizePt, color: rp.color, font: rp.font,
-      spacingPct: rp.spacingTw ? Math.round((rp.spacingTw / ((rp.sizePt ?? 10) * 20)) * 100) : undefined };
+      spacingPct: rp.spacingTw ? Math.round((rp.spacingTw / ((rp.sizePt ?? 10) * 20)) * 100) : undefined,
+      ...(this.openMemo ? { memo: this.openMemo } : {}) };
     for (const c of kids(r)) {
       switch (c.localName) {
         case 't': out.push({ kind: 'text', text: c.textContent ?? '', ...style }); break;
@@ -492,6 +504,17 @@ export async function readDocx(bytes: Uint8Array | ArrayBuffer, title = '문서'
     if (mime) r.media.set(f.name.replace(/^word\//, ''), { mime, data: bytesToBase64(bytes) });
   }
   r.readStyles(await optional('word/styles.xml'));
+  // Word 메모(comments.xml) → 메모
+  const commentsXml = await optional('word/comments.xml');
+  for (const c of kids(commentsXml?.documentElement, 'comment')) {
+    const text = kids(c, 'p').map((p) => descendants(p, 't').map((t) => t.textContent ?? '').join('')).join('\n');
+    const memo: Memo = { id: `wc${attr(c, 'id') ?? ''}`, text };
+    const author = attr(c, 'author');
+    if (author && author !== 'HanWord') memo.author = author;
+    const date = attr(c, 'date');
+    if (date) memo.date = date;
+    r.comments.set(attr(c, 'id') ?? '', memo);
+  }
   r.numbering = new Numbering(await optional('word/numbering.xml'));
 
   const doc = parseXml(await main.async('string'));
@@ -537,5 +560,11 @@ export async function readDocx(bytes: Uint8Array | ArrayBuffer, title = '문서'
   const core = zip.file('docProps/core.xml');
   const savedTitle = core ? (await core.async('string')).match(/<dc:title>([^<]+)<\/dc:title>/)?.[1]?.trim() : undefined;
   const unescape = (t: string) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-  return { doc: { title: savedTitle ? unescape(savedTitle) : title, page, blocks, ...extra } as Doc, warnings: [...r.warnings] };
+  const out = { title: savedTitle ? unescape(savedTitle) : title, page, blocks, ...extra } as Doc;
+  // 본문에 실제로 달린 메모만 (나온 순서)
+  const used = new Set<string>();
+  const walk = (ps: Paragraph[]) => ps.forEach((p) => p.inlines.forEach((i) => i.kind === 'text' && i.memo && used.add(i.memo)));
+  for (const b of blocks) b.type === 'paragraph' ? walk([b]) : b.rows.forEach((row) => row.forEach((c) => walk(c.blocks)));
+  if (used.size) out.memos = [...used].map((id) => r.comments.get(id.slice(2))!).filter(Boolean);
+  return { doc: out, warnings: [...r.warnings] };
 }
