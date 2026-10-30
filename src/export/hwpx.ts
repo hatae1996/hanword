@@ -13,7 +13,8 @@
  *   - linesegarray(줄 배치 캐시)는 생략 → 한글이 열 때 다시 계산한다.
  */
 import JSZip from 'jszip';
-import type { Align, Doc, Paragraph, ParaRole, ParaStyle, Table } from '../model/types';
+import type { Align, BorderLine, CellBorders, Doc, Paragraph, ParaRole, ParaStyle, Table, TableCell } from '../model/types';
+import { DEFAULT_BORDER, cleanBorders, resolveEdges } from '../model/borders';
 import { TABLE_DEFAULTS, defaultParaStyle } from '../model/defaults';
 import { maxSizePt, plainText, resolveRun, runKey, xmlEscape, type ResolvedRun } from '../model/resolve';
 import { placeCells } from '../model/table';
@@ -23,6 +24,7 @@ import { BLANK_HWPX_BASE64 } from './templates.generated';
 const LANGS = ['HANGUL', 'LATIN', 'HANJA', 'JAPANESE', 'OTHER', 'SYMBOL', 'USER'] as const;
 const LANG_ATTR = ['hangul', 'latin', 'hanja', 'japanese', 'other', 'symbol', 'user'] as const;
 const HWP_ALIGN: Record<Align, string> = { left: 'LEFT', center: 'CENTER', right: 'RIGHT', justify: 'JUSTIFY' };
+const HWP_LINE = { none: 'NONE', solid: 'SOLID', double: 'DOUBLE_SLIM' } as const;
 const NS_UNITCHAR = 'http://www.hancom.co.kr/hwpml/2016/HwpUnitChar';
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -57,8 +59,9 @@ class HeaderBuilder {
   private readonly paraBase: number;
   private readonly styleBase: number;
   readonly tableBorderFillId: number;
-  /** 칸 배경색별 테두리/채우기 id (색 없음 = tableBorderFillId) */
-  private cellFills: string[] = [];
+  /** 칸 모양(배경색 + 테두리)별 borderFill — 기본 모양 = tableBorderFillId */
+  private cellFills: { bg?: string; borders?: CellBorders }[] = [];
+  private cellFillKeys: string[] = [];
 
   constructor(private readonly template: string) {
     this.charBase = itemCnt(template, 'charProperties');
@@ -91,11 +94,16 @@ class HeaderBuilder {
     return id;
   }
 
-  cellBorderFill(bg?: string): number {
-    if (!bg) return this.tableBorderFillId;
-    const c = bg.toUpperCase();
-    let i = this.cellFills.indexOf(c);
-    if (i < 0) i = this.cellFills.push(c) - 1;
+  cellBorderFill(cell: Pick<TableCell, 'bg' | 'borders'>): number {
+    const bg = cell.bg?.toUpperCase();
+    const borders = cleanBorders(cell.borders);
+    if (!bg && !borders) return this.tableBorderFillId;
+    const key = JSON.stringify([bg ?? null, borders ?? null]);
+    let i = this.cellFillKeys.indexOf(key);
+    if (i < 0) {
+      i = this.cellFillKeys.push(key) - 1;
+      this.cellFills.push({ bg, borders });
+    }
     return this.tableBorderFillId + 1 + i;
   }
 
@@ -132,18 +140,19 @@ class HeaderBuilder {
       return `<hh:fontface lang="${lang}" fontCnt="${n}">${body}${added}</hh:fontface>`;
     });
 
-    // 2) 표 테두리
-    const w = hwpBorderWidth(TABLE_DEFAULTS.borderMm);
-    const line = (side: string) => `<hh:${side} type="SOLID" width="${w}" color="#000000"/>`;
-    const fill = (id: number, bg?: string) =>
+    // 2) 표 테두리 (칸마다 네 변의 선 + 배경색)
+    const line = (side: string, b: BorderLine) =>
+      `<hh:${side} type="${HWP_LINE[b.style]}" width="${hwpBorderWidth(b.style === 'none' ? 0.1 : b.widthMm)}" color="${b.color}"/>`;
+    const fill = (id: number, bg?: string, cb?: CellBorders) =>
       `<hh:borderFill id="${id}" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">` +
       `<hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/>` +
-      line('leftBorder') + line('rightBorder') + line('topBorder') + line('bottomBorder') +
+      line('leftBorder', cb?.left ?? DEFAULT_BORDER) + line('rightBorder', cb?.right ?? DEFAULT_BORDER) +
+      line('topBorder', cb?.top ?? DEFAULT_BORDER) + line('bottomBorder', cb?.bottom ?? DEFAULT_BORDER) +
       `<hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/>` +
       // 칸 배경색: 단색 채우기 (한글 "셀 테두리/배경 → 배경 → 면 색")
       (bg ? `<hc:fillBrush><hc:winBrush faceColor="${bg}" hatchColor="#999999" alpha="0"/></hc:fillBrush>` : '') +
       `</hh:borderFill>`;
-    const fills = [fill(this.tableBorderFillId), ...this.cellFills.map((bg, i) => fill(this.tableBorderFillId + 1 + i, bg))];
+    const fills = [fill(this.tableBorderFillId), ...this.cellFills.map((f, i) => fill(this.tableBorderFillId + 1 + i, f.bg, f.borders))];
     xml = appendItems(xml, 'borderFills', fills.join(''), fills.length);
 
     // 3) 글자 모양
@@ -152,7 +161,7 @@ class HeaderBuilder {
         const fontRef = LANG_ATTR.map((a, li) => `${a}="${fontIds[LANGS[li]]?.get(r.font) ?? 0}"`).join(' ');
         return (
           `<hh:charPr id="${this.charBase + i}" height="${ptToHwp(r.sizePt)}" textColor="${r.color}" shadeColor="none" useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="2">` +
-          `<hh:fontRef ${fontRef}/><hh:ratio ${langAttrs(100)}/><hh:spacing ${langAttrs(0)}/><hh:relSz ${langAttrs(100)}/><hh:offset ${langAttrs(0)}/>` +
+          `<hh:fontRef ${fontRef}/><hh:ratio ${langAttrs(100)}/><hh:spacing ${langAttrs(r.spacing)}/><hh:relSz ${langAttrs(100)}/><hh:offset ${langAttrs(0)}/>` +
           (r.italic ? '<hh:italic/>' : '') +
           (r.bold ? '<hh:bold/>' : '') +
           `<hh:underline type="${r.underline ? 'BOTTOM' : 'NONE'}" shape="SOLID" color="${r.color}"/>` +
@@ -239,7 +248,8 @@ class SectionBuilder {
     return `<hp:p id="${this.nextParaId++}" paraPrIDRef="${paraPrId}" styleIDRef="${styleId}" pageBreak="0" columnBreak="0" merged="0">${inner}</hp:p>`;
   }
 
-  table(t: Table, prefixRun = ''): string {
+  table(table: Table, prefixRun = ''): string {
+    const t = resolveEdges(table);
     const { placed, rowCount, colCount } = placeCells(t);
     const bf = this.hb.tableBorderFillId;
     const colW = t.colWidthsMm.map(mmToHwp);
@@ -262,7 +272,7 @@ class SectionBuilder {
             const height = rowH.slice(pc.row, pc.row + pc.rowspan).reduce((a, b) => a + b, 0);
             const paras = pc.cell.blocks.map((b) => this.paragraph(b)).join('');
             return (
-              `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${this.hb.cellBorderFill(pc.cell.bg)}">` +
+              `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${this.hb.cellBorderFill(pc.cell)}">` +
               `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">${paras}</hp:subList>` +
               `<hp:cellAddr colAddr="${pc.col}" rowAddr="${pc.row}"/><hp:cellSpan colSpan="${pc.colspan}" rowSpan="${pc.rowspan}"/>` +
               `<hp:cellSz width="${width}" height="${height}"/>${margin('cellMargin')}</hp:tc>`

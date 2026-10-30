@@ -6,7 +6,11 @@ import type { PageSetup, ParaRole, ParaStyle } from './types';
  * - 함초롬체는 한글(한컴오피스)이 깔린 PC에만 있음 → Word 사용자에게 보내면 대체 글꼴로 바뀐다.
  */
 export const SAFE_FONTS = ['맑은 고딕', '바탕', '돋움', '굴림'] as const;
-export const HANCOM_ONLY_FONTS = ['함초롬바탕', '함초롬돋움'] as const;
+/**
+ * 한컴오피스를 설치하면 함께 깔리는 글꼴 — 한글에서는 그대로, 한컴오피스가 없는 PC 의 Word 에서는 다른 글꼴로 보인다.
+ * 휴먼명조(본문)·HY헤드라인M(제목)은 공공기관 보고서의 표준 조합.
+ */
+export const HANCOM_ONLY_FONTS = ['휴먼명조', 'HY헤드라인M', 'HY견고딕', '한컴돋움', '함초롬바탕', '함초롬돋움'] as const;
 export const ALL_FONTS: readonly string[] = [...SAFE_FONTS, ...HANCOM_ONLY_FONTS];
 
 export const DEFAULT_FONT = '맑은 고딕';

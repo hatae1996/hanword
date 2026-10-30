@@ -4,6 +4,7 @@
 import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaRole, RunStyle, Table, TableCell } from './types';
 import { DEFAULT_PAGE, LIST_INDENT_MM, contentWidthMm, defaultParaStyle } from './defaults';
 import { normalizeWidths, placeCells } from './table';
+import { cleanBorders, resolveEdges } from './borders';
 import { pxToMm } from './units';
 
 export type PMNode = {
@@ -131,6 +132,16 @@ export function normalizeColor(v: unknown): string | undefined {
   return undefined;
 }
 
+/** letter-spacing CSS → 자간 % ("-0.05em" → -5, "-5%" → -5) */
+export function parseLetterSpacingPct(v: unknown): number | undefined {
+  if (typeof v !== 'string' || !v.trim()) return undefined;
+  const m = v.trim().match(/^(-?[\d.]+)\s*(em|%)?$/);
+  if (!m) return undefined;
+  const n = parseFloat(m[1]);
+  const pct = m[2] === '%' ? n : n * 100;
+  return Math.round(pct) || undefined;
+}
+
 function cleanFont(v: unknown): string | undefined {
   if (typeof v !== 'string' || !v.trim()) return undefined;
   return v.split(',')[0].replace(/["']/g, '').trim() || undefined;
@@ -150,6 +161,8 @@ function marksToStyle(marks: PMNode['marks']): RunStyle {
       if (color) s.color = color;
       const font = cleanFont(m.attrs?.fontFamily);
       if (font) s.font = font;
+      const sp = parseLetterSpacingPct(m.attrs?.letterSpacing);
+      if (sp) s.spacingPct = sp;
     }
   }
   return s;
@@ -173,6 +186,8 @@ function toTable(node: PMNode, widthMm: number): Table {
       const cell: TableCell = { colspan: cellNode.attrs?.colspan ?? 1, rowspan: cellNode.attrs?.rowspan ?? 1, blocks };
       const bg = normalizeColor(cellNode.attrs?.backgroundColor);
       if (bg && bg !== '#FFFFFF') cell.bg = bg;
+      const borders = cleanBorders(cellNode.attrs?.borders);
+      if (borders) cell.borders = borders;
       if (Array.isArray(cellNode.attrs?.colwidth)) rawWidths.set(cell, cellNode.attrs!.colwidth);
       row.push(cell);
     }
@@ -188,5 +203,6 @@ function toTable(node: PMNode, widthMm: number): Table {
         if (px && widths[pc.col + i] === undefined) widths[pc.col + i] = pxToMm(px);
       });
     }
-  return { type: 'table', rows, colWidthsMm: normalizeWidths(widths, colCount, widthMm) };
+  // 맞닿은 칸의 테두리를 맞춘다 (한 칸에만 '선 없음'을 줘도 한글·Word 에서 선이 사라지도록)
+  return resolveEdges({ type: 'table', rows, colWidthsMm: normalizeWidths(widths, colCount, widthMm) });
 }

@@ -13,6 +13,8 @@ export interface ResolvedRun {
   underline: boolean;
   strike: boolean;
   color: string;
+  /** 자간 % */
+  spacing: number;
 }
 
 export function resolveRun(p: Paragraph, r?: Partial<TextRun>): ResolvedRun {
@@ -25,11 +27,12 @@ export function resolveRun(p: Paragraph, r?: Partial<TextRun>): ResolvedRun {
     underline: !!r?.underline,
     strike: !!r?.strike,
     color: (r?.color || DEFAULT_COLOR).toUpperCase(),
+    spacing: Math.round(r?.spacingPct ?? 0),
   };
 }
 
 export function runKey(r: ResolvedRun): string {
-  return [r.font, r.sizePt, +r.bold, +r.italic, +r.underline, +r.strike, r.color].join('|');
+  return [r.font, r.sizePt, +r.bold, +r.italic, +r.underline, +r.strike, r.color, r.spacing].join('|');
 }
 
 /** 문단에서 가장 큰 글자 크기 (빈 문단은 역할 기본 크기) */

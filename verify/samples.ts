@@ -75,4 +75,37 @@ export const SAMPLES: Record<string, N> = {
     h(1, '3. 쪽 나눔 시험'),
     ...Array.from({ length: 60 }, (_, i) => p([t(`${i + 1}번째 문단입니다. 한글과 Word 에서 쪽 수가 같게 나오는지 확인하기 위한 문장이 이어집니다. `.repeat(2))])),
   ),
+  // 공공기관 보고서 모양: 위아래 선만 있는 제목, 좌우 바깥선 없는 표, 머리행 아래 겹선, 보고서 글꼴
+  '04-공문표': doc(
+    {
+      type: 'table',
+      content: [
+        row(
+          cell('기록물 이관 결과 보고', {
+            borders: {
+              top: { style: 'solid', widthMm: 0.7, color: '#1F3864' },
+              bottom: { style: 'solid', widthMm: 0.4, color: '#1F3864' },
+              left: { style: 'none', widthMm: 0.1, color: '#000000' },
+              right: { style: 'none', widthMm: 0.1, color: '#000000' },
+            },
+          }, [style({ fontFamily: 'HY헤드라인M', fontSize: '20pt' })]),
+        ),
+      ],
+    },
+    p([t('본문은 휴먼명조', style({ fontFamily: '휴먼명조', fontSize: '15pt', letterSpacing: '-0.05em' }))]),
+    {
+      type: 'table',
+      content: [
+        row(
+          cell('구분', { backgroundColor: '#F2F2F2', borders: { top: { style: 'solid', widthMm: 0.4, color: '#000000' }, bottom: { style: 'double', widthMm: 0.5, color: '#000000' }, left: { style: 'none', widthMm: 0.1, color: '#000000' } } }, [B]),
+          cell('수량', { backgroundColor: '#F2F2F2', borders: { top: { style: 'solid', widthMm: 0.4, color: '#000000' }, bottom: { style: 'double', widthMm: 0.5, color: '#000000' }, right: { style: 'none', widthMm: 0.1, color: '#000000' } } }, [B]),
+        ),
+        row(cell('본관', { borders: { left: { style: 'none', widthMm: 0.1, color: '#000000' } } }), cell('120', { borders: { right: { style: 'none', widthMm: 0.1, color: '#000000' } } })),
+        row(
+          cell('합계', { borders: { left: { style: 'none', widthMm: 0.1, color: '#000000' }, bottom: { style: 'solid', widthMm: 0.4, color: '#000000' } } }),
+          cell('120', { borders: { right: { style: 'none', widthMm: 0.1, color: '#000000' }, bottom: { style: 'solid', widthMm: 0.4, color: '#000000' } } }),
+        ),
+      ],
+    },
+  ),
 };

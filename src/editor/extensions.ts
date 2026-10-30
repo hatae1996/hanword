@@ -8,6 +8,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import { TableKit } from '@tiptap/extension-table';
 import type { AnyExtension } from '@tiptap/core';
 import { ParagraphFormat } from './paragraphFormat';
+import { LetterSpacing } from './letterSpacing';
 
 export function schemaExtensions(opts: { resizableTables?: boolean } = {}): AnyExtension[] {
   return [
@@ -26,5 +27,6 @@ export function schemaExtensions(opts: { resizableTables?: boolean } = {}): AnyE
     TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
     TableKit.configure({ table: { resizable: !!opts.resizableTables, cellMinWidth: 30 } }),
     ParagraphFormat,
+    LetterSpacing,
   ];
 }

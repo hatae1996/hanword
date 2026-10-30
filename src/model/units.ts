@@ -18,9 +18,13 @@ export const pxToMm = (px: number) => (px * MM_PER_INCH) / 96;
 
 /** 한글 표 테두리 굵기 문자열 ("0.12 mm") — 한글은 정해진 값만 허용 */
 const HWP_BORDER_WIDTHS = [0.1, 0.12, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0];
+/** 한글이 허용하는 가장 가까운 테두리 굵기 (mm) */
+export function snapBorderMm(mm: number): number {
+  return HWP_BORDER_WIDTHS.reduce((a, b) => (Math.abs(b - mm) < Math.abs(a - mm) ? b : a));
+}
 export function hwpBorderWidth(mm: number): string {
-  const best = HWP_BORDER_WIDTHS.reduce((a, b) => (Math.abs(b - mm) < Math.abs(a - mm) ? b : a));
-  return `${best} mm`;
+  const best = snapBorderMm(mm);
+  return `${best === 1 ? '1.0' : best === 2 ? '2.0' : best === 3 ? '3.0' : best === 4 ? '4.0' : best === 5 ? '5.0' : best} mm`;
 }
 
 /**

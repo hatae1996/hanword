@@ -5,7 +5,8 @@
  * 지원하지 않는 요소(그림, 도형, 수식, 머리말/꼬리말, 각주 …)는 건너뛰고 warnings 에 남긴다.
  */
 import JSZip from 'jszip';
-import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaStyle, Table, TableCell, TextRun } from '../model/types';
+import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaStyle, Table, TableCell, TextRun, CellBorders, LineStyle } from '../model/types';
+import { cleanBorders } from '../model/borders';
 import { DEFAULT_PAGE, contentWidthMm, defaultParaStyle } from '../model/defaults';
 import { cleanParagraph } from '../model/normalize';
 import { normalizeWidths, placeCells } from '../model/table';
@@ -26,6 +27,7 @@ interface CharInfo {
   underline: boolean;
   strike: boolean;
   font?: string;
+  spacingPct?: number;
 }
 interface ParaInfo {
   style: ParaStyle;
@@ -47,8 +49,8 @@ class Reader {
   chars = new Map<string, CharInfo>();
   paras = new Map<string, ParaInfo>();
   styleRoles = new Map<string, 'h1' | 'h2' | 'h3'>();
-  /** borderFill id → 칸 배경색 */
-  fills = new Map<string, string>();
+  /** borderFill id → 칸 배경색·테두리 */
+  fills = new Map<string, { bg?: string; borders?: CellBorders }>();
   warnings = new Set<string>();
 
   readHeader(head: Document) {
@@ -71,12 +73,25 @@ class Reader {
         underline: !!underline && (attr(underline, 'type') ?? 'NONE') !== 'NONE',
         strike: !!strike && !['NONE', ''].includes(attr(strike, 'shape') ?? 'NONE'),
         font: this.fontsHangul.get(fontId) || undefined,
+        spacingPct: num(attr(kid(c, 'spacing'), 'hangul')) || undefined,
       });
     }
     for (const p of kids(kid(refList, 'paraProperties'), 'paraPr')) this.paras.set(attr(p, 'id') ?? '', this.readParaPr(p));
     for (const bf of kids(kid(refList, 'borderFills'), 'borderFill')) {
       const face = (attr(kid(kid(bf, 'fillBrush'), 'winBrush'), 'faceColor') ?? '').toUpperCase();
-      if (/^#[0-9A-F]{6}$/.test(face) && face !== '#FFFFFF') this.fills.set(attr(bf, 'id') ?? '', face);
+      const info: { bg?: string; borders?: CellBorders } = {};
+      if (/^#[0-9A-F]{6}$/.test(face) && face !== '#FFFFFF') info.bg = face;
+      const sides: CellBorders = {};
+      for (const [tag, side] of [['topBorder', 'top'], ['bottomBorder', 'bottom'], ['leftBorder', 'left'], ['rightBorder', 'right']] as const) {
+        const el = kid(bf, tag);
+        if (!el) continue;
+        const type = (attr(el, 'type') ?? 'SOLID').toUpperCase();
+        const style: LineStyle = type === 'NONE' ? 'none' : /DOUBLE|SLIM_THICK|THICK_SLIM/.test(type) ? 'double' : 'solid';
+        sides[side] = { style, widthMm: parseFloat(attr(el, 'width') ?? '0.12') || 0.12, color: (attr(el, 'color') ?? '#000000').toUpperCase() };
+      }
+      const borders = cleanBorders(sides);
+      if (borders) info.borders = borders;
+      this.fills.set(attr(bf, 'id') ?? '', info);
     }
     for (const st of kids(kid(refList, 'styles'), 'style')) {
       const m = (attr(st, 'name') ?? '').match(/^제목 ([1-3])$/) ?? (attr(st, 'engName') ?? '').match(/^Heading ([1-3])$/i);
@@ -145,7 +160,7 @@ class Reader {
     };
     for (const run of kids(p, 'run')) {
       const ch = this.chars.get(attr(run, 'charPrIDRef') ?? '');
-      const style = ch ? { bold: ch.bold, italic: ch.italic, underline: ch.underline, strike: ch.strike, sizePt: ch.sizePt, color: ch.color, font: ch.font } : {};
+      const style = ch ? { bold: ch.bold, italic: ch.italic, underline: ch.underline, strike: ch.strike, sizePt: ch.sizePt, color: ch.color, font: ch.font, spacingPct: ch.spacingPct } : {};
       for (const c of kids(run)) {
         const name = c.localName;
         if (name === 't') this.readText(c, style, inlines);
@@ -201,8 +216,9 @@ class Reader {
         const paras = blocks.filter((b): b is Paragraph => b.type === 'paragraph');
         if (!paras.length) paras.push(cleanParagraph({ type: 'paragraph', role: 'body', style: defaultParaStyle(), inlines: [] }));
         const cell: TableCell = { colspan, rowspan, blocks: paras };
-        const bg = this.fills.get(attr(tc, 'borderFillIDRef') ?? '');
-        if (bg) cell.bg = bg;
+        const fill = this.fills.get(attr(tc, 'borderFillIDRef') ?? '');
+        if (fill?.bg) cell.bg = fill.bg;
+        if (fill?.borders) cell.borders = fill.borders;
         row.push({ col, cell });
       }
       // cellAddr 순서대로 (한글은 보통 이미 정렬돼 있음)

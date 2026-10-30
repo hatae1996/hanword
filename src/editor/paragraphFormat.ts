@@ -7,6 +7,8 @@
  * → AI 가 쓴 HTML, 웹/Word 에서 붙여넣은 글의 들여쓰기도 살아난다.
  */
 import { Extension } from '@tiptap/core';
+import { bordersToCss, cssToBorders } from '../model/borders';
+import type { CellBorders } from '../model/types';
 
 /** CSS 길이 → mm */
 export function cssToMm(v: string | null | undefined): number | null {
@@ -90,6 +92,20 @@ export const ParagraphFormat = Extension.create({
             },
             renderHTML: (attrs: Record<string, any>) =>
               attrs.backgroundColor ? { 'data-bg': attrs.backgroundColor, style: `background-color: ${attrs.backgroundColor}` } : {},
+          },
+          // 칸 테두리: style="border-top: 0.4mm solid #000000; border-left: none" (마크다운 HTML 표와 같은 문법)
+          borders: {
+            default: null as CellBorders | null,
+            // data-borders: 정확한 값(mm) — 편집기 안 복사·붙여넣기용. 없으면 style 의 border-* 를 읽는다 (마크다운·다른 프로그램)
+            parseHTML: (el: HTMLElement) => cssToBorders(el.getAttribute('data-borders') ?? el.getAttribute('style')) ?? null,
+            renderHTML: (attrs: Record<string, any>) => {
+              const exact = bordersToCss(attrs.borders);
+              if (!exact) return {};
+              const css = bordersToCss(attrs.borders, true);
+              // 선 없는 변: 편집 화면에서만 옅은 점선으로 보여 준다 (한글의 "투명 선 보이기"). 저장에는 영향 없음
+              const none = (['top', 'bottom', 'left', 'right'] as const).filter((sd) => attrs.borders?.[sd]?.style === 'none');
+              return { style: css, 'data-borders': exact, ...(none.length ? { 'data-bn': none.join(' ') } : {}) };
+            },
           },
         },
       },

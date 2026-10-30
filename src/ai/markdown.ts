@@ -17,6 +17,7 @@ import { DEFAULT_FONT, DEFAULT_PAGE, ROLE_RUN, contentWidthMm, defaultParaStyle 
 import { cleanRun } from '../model/normalize';
 import { tiptapToDoc, type PMNode } from '../model/fromTiptap';
 import { placeCells } from '../model/table';
+import { bordersToCss } from '../model/borders';
 
 export interface MdMeta {
   title?: string;
@@ -26,6 +27,10 @@ export interface MdMeta {
   font?: string;
   sizePt?: number;
   linePct?: number;
+  /** 자간 % (한글 보고서는 보통 -5) */
+  spacingPct?: number;
+  /** 모든 표의 모양 ("공문") */
+  tableStyle?: string;
 }
 
 // ── 개조식 ───────────────────────────────────────────────
@@ -67,6 +72,8 @@ function parseFrontMatter(md: string): { meta: MdMeta; body: string } {
     } else if (['글꼴', 'font'].includes(key)) meta.font = val;
     else if (['글자크기', '글자 크기', 'size', 'fontsize'].includes(key)) meta.sizePt = parseFloat(val) || undefined;
     else if (['줄간격', '줄 간격', 'line', 'linespacing'].includes(key)) meta.linePct = parseFloat(val) || undefined;
+    else if (['표', '표모양', '표 모양', 'table'].includes(key)) meta.tableStyle = val;
+    else if (['자간', 'letterspacing', 'spacing'].includes(key)) meta.spacingPct = Math.round(parseFloat(val)) || undefined;
   }
   return { meta, body: md.slice(m[0].length) };
 }
@@ -140,7 +147,7 @@ function preprocess(md: string): string {
 }
 
 /** HTML 보조 문법 정리: align 속성 → style, 셀 너비 % → 편집기 열 너비, th → 굵은 가운데 td */
-function postprocessHtml(html: string, contentPx: number): string {
+function postprocessHtml(html: string, contentPx: number, tableStyle?: string): string {
   // <p align="center"> 등 → style="text-align:center"
   html = html.replace(/<(p|h[1-6]|div|td|th)\b([^>]*?)\salign\s*=\s*["']?(left|center|right|justify)["']?([^>]*)>/gi, (_m, tag, a, al, b) => {
     const rest = `${a}${b}`;
@@ -166,7 +173,57 @@ function postprocessHtml(html: string, contentPx: number): string {
     } else if (isHead) body = body.replace(/<p\b([^>]*)>([\s\S]*?)<\/p>/gi, (_x, pa, t) => `<p${pa || ' style="text-align:center"'}><strong>${t}</strong></p>`);
     return `<td${a}>${body}</td>`;
   });
-  return html;
+  // HTML 문단(<p style="margin-top:…">○ …</p>)도 개조식 기호로 시작하면 들여쓰기 (표 안은 제외 — "○○과" 같은 빈칸)
+  html = html.replace(/(<table\b[\s\S]*?<\/table>)|<p\b([^>]*)>([\s\S]*?)<\/p>/gi, (m, tbl, attrs = '', inner = '') => {
+    if (tbl || /data-indent-left|margin-left|text-indent/i.test(attrs)) return m;
+    const text = inner.replace(/<[^>]+>/g, '').replace(/&nbsp;| /g, ' ').trimStart();
+    if (!/^[□■○●※◦▪·∙]\s/.test(text)) return m;
+    const level = gaejoLevel(text)!;
+    const a = /text-align/i.test(attrs) ? attrs : /\bstyle\s*=\s*"/i.test(attrs) ? attrs.replace(/\bstyle\s*=\s*"/i, 'style="text-align:left;') : `${attrs} style="text-align:left"`;
+    return `<p data-indent-left="${level * GAEJO_STEP_MM + GAEJO_HANG_MM}" data-first-line="${-GAEJO_HANG_MM}"${a}>${inner}</p>`;
+  });
+  return expandTableStyles(html, tableStyle);
+}
+
+/**
+ * 공문 표 모양: <table data-style="공문"> (또는 맨 위 설정 "표: 공문" 이면 모든 표)
+ * 위·아래 바깥선 0.4mm, 좌우 바깥선 없음, 첫 줄(머리행) 아래 겹선, 안쪽은 가는 선.
+ * 칸에 직접 쓴 border-* 가 있으면 그 변은 그대로 둔다. data-style="기본" 이면 적용하지 않는다.
+ */
+function expandTableStyles(html: string, defaultStyle?: string): string {
+  return html.replace(/<table\b([^>]*)>([\s\S]*?)<\/table>/gi, (m, tattrs: string, inner: string) => {
+    const kind = tattrs.match(/data-style\s*=\s*["']?([^"'>]+)/i)?.[1]?.trim() ?? defaultStyle;
+    if (!kind || !/공문|official/i.test(kind)) return m;
+    const rows = [...inner.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map((r) =>
+      [...r[1].matchAll(/<td\b([^>]*)>/gi)].map((c) => ({
+        colspan: Number(c[1].match(/colspan\s*=\s*["']?(\d+)/i)?.[1] ?? 1),
+        rowspan: Number(c[1].match(/rowspan\s*=\s*["']?(\d+)/i)?.[1] ?? 1),
+        blocks: [],
+      })),
+    );
+    const { placed, rowCount, colCount } = placeCells({ rows });
+    const css = placed.flat().map((pc) => {
+      const side: Record<string, string> = {};
+      if (pc.row === 0) side.top = '0.4mm solid #000000';
+      if (pc.row + pc.rowspan >= rowCount) side.bottom = '0.4mm solid #000000';
+      else if (pc.row === 0 && pc.rowspan === 1) side.bottom = '0.5mm double #000000';
+      if (pc.col === 0) side.left = 'none';
+      if (pc.col + pc.colspan >= colCount) side.right = 'none';
+      return side;
+    });
+    let k = 0;
+    const body = inner.replace(/<td\b([^>]*)>/gi, (_t, a: string) => {
+      const side = css[k++] ?? {};
+      const style = a.match(/\bstyle\s*=\s*"([^"]*)"/i)?.[1] ?? '';
+      const add = Object.entries(side)
+        .filter(([s]) => !new RegExp(`border(-${s})?\\s*:`, 'i').test(style))
+        .map(([s, v]) => `border-${s}:${v}`);
+      if (!add.length) return `<td${a}>`;
+      const merged = [style.replace(/;\s*$/, ''), ...add].filter(Boolean).join('; ');
+      return /\bstyle\s*=\s*"/i.test(a) ? `<td${a.replace(/\bstyle\s*=\s*"[^"]*"/i, `style="${merged}"`)}>` : `<td${a} style="${merged}">`;
+    });
+    return `<table${tattrs}>${body}</table>`;
+  });
 }
 
 export interface MdResult {
@@ -225,7 +282,7 @@ export function markdownToHtml(md: string): MdResult {
     },
   });
   const raw = marked.parse(preprocess(body)) as string;
-  return { html: postprocessHtml(raw, contentPx), meta, warnings: [...warnings] };
+  return { html: postprocessHtml(raw, contentPx, meta.tableStyle), meta, warnings: [...warnings] };
 }
 
 /** 머리말 설정(기본 글꼴·크기·줄 간격)을 문서 전체에 적용 */
@@ -236,12 +293,13 @@ function applyMetaDefaults(blocks: Block[], meta: MdMeta) {
       if (i.kind !== 'text') continue;
       if (meta.font && meta.font !== DEFAULT_FONT && !i.font) i.font = meta.font;
       if (meta.sizePt && p.role === 'body' && meta.sizePt !== ROLE_RUN.body.sizePt && !i.sizePt) i.sizePt = meta.sizePt;
+      if (meta.spacingPct && i.spacingPct === undefined) i.spacingPct = meta.spacingPct;
     }
     const font = meta.font && meta.font !== DEFAULT_FONT ? meta.font : undefined;
     const size = meta.sizePt && meta.sizePt !== ROLE_RUN.body.sizePt ? meta.sizePt : undefined;
     if (!p.inlines.some((i) => i.kind === 'text') && (font || size)) {
       // 빈 문단도 같은 높이가 되도록 보이지 않는 서식 조각을 둔다 (저장기가 문단 글자모양으로 씀)
-      p.inlines.push({ kind: 'text', text: '', font, sizePt: p.role === 'body' ? size : undefined });
+      p.inlines.push({ kind: 'text', text: '', font, sizePt: p.role === 'body' ? size : undefined, spacingPct: meta.spacingPct });
     }
   };
   for (const b of blocks) {
@@ -271,6 +329,7 @@ function runStyleCss(r: TextRun): string {
   if (r.color) css.push(`color:${r.color}`);
   if (r.sizePt) css.push(`font-size:${r.sizePt}pt`);
   if (r.font) css.push(`font-family:${r.font}`);
+  if (r.spacingPct) css.push(`letter-spacing:${r.spacingPct / 100}em`);
   return css.join('; ');
 }
 
@@ -383,7 +442,8 @@ function tableToMd(t: Table, contentMm: number): string {
         if (pc.rowspan > 1) attrs.push(`rowspan="${pc.rowspan}"`);
         // 열 너비: 본문 폭 대비 % (가로 병합 칸만 있는 줄도 있으므로 한 칸짜리 셀마다 적는다)
         if (pc.colspan === 1) attrs.push(`width="${Math.round((t.colWidthsMm[pc.col] / total) * 10000) / 100}%"`);
-        if (pc.cell.bg) attrs.push(`style="background:${pc.cell.bg}"`);
+        const css = [pc.cell.bg ? `background:${pc.cell.bg}` : '', bordersToCss(pc.cell.borders)].filter(Boolean).join('; ');
+        if (css) attrs.push(`style="${css}"`);
         const content = pc.cell.blocks.map((b) => paraToHtml(b)).join('');
         return `<td${attrs.length ? ' ' + attrs.join(' ') : ''}>${content}</td>`;
       })

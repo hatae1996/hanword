@@ -22,7 +22,8 @@ import {
   WidthType,
   type IParagraphOptions,
 } from 'docx';
-import type { Align, Doc, Paragraph, Table } from '../model/types';
+import type { Align, BorderLine, Doc, Paragraph, Table } from '../model/types';
+import { resolveEdges } from '../model/borders';
 import { DEFAULT_FONT, DEFAULT_SIZE_PT, ROLE_PARA, ROLE_RUN, TABLE_DEFAULTS } from '../model/defaults';
 import { cleanText, maxSizePt, resolveRun } from '../model/resolve';
 import { placeCells } from '../model/table';
@@ -65,6 +66,8 @@ function paragraph(p: Paragraph): DParagraph {
         underline: r.underline ? { type: 'single' } : undefined,
         strike: r.strike,
         color: r.color.replace('#', ''),
+        // 자간: 한글은 글자 크기 대비 %, Word 는 twip(1/20pt) → 크기 × % 로 환산
+        characterSpacing: r.spacing ? Math.round(r.sizePt * 20 * (r.spacing / 100)) : undefined,
       }),
     );
   }
@@ -93,7 +96,14 @@ function paragraph(p: Paragraph): DParagraph {
   return new DParagraph(opts);
 }
 
-function table(t: Table): DTable {
+/** 칸 테두리 한 변 → Word 선 (선 없음은 nil 로 표 기본 선을 덮어씀) */
+function wordLine(b: BorderLine) {
+  if (b.style === 'none') return { style: BorderStyle.NIL, size: 0, color: 'auto' };
+  return { style: b.style === 'double' ? BorderStyle.DOUBLE : BorderStyle.SINGLE, size: mmToEighthPt(b.widthMm), color: b.color.replace('#', '') };
+}
+
+function table(table: Table): DTable {
+  const t = resolveEdges(table);
   const border = { style: BorderStyle.SINGLE, size: mmToEighthPt(TABLE_DEFAULTS.borderMm), color: '000000' };
   const borders = { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border };
   const colTwips = t.colWidthsMm.map(mmToTwip);
@@ -110,6 +120,9 @@ function table(t: Table): DTable {
             width: { size: width, type: WidthType.DXA },
             verticalAlign: VerticalAlign.CENTER, // 한글 표 기본값과 동일
             shading: pc.cell.bg ? { type: ShadingType.CLEAR, color: 'auto', fill: pc.cell.bg.replace('#', '') } : undefined,
+            borders: pc.cell.borders
+              ? Object.fromEntries(Object.entries(pc.cell.borders).filter(([, b]) => b).map(([side, b]) => [side, wordLine(b!)]))
+              : undefined,
           });
         }),
       }),

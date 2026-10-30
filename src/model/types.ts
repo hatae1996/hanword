@@ -17,8 +17,10 @@ export interface RunStyle {
   sizePt?: number;
   /** #RRGGBB */
   color?: string;
-  /** 글꼴 이름. fonts.ts 의 SAFE_FONTS 중 하나 */
+  /** 글꼴 이름. defaults.ts 의 ALL_FONTS 권장 */
   font?: string;
+  /** 자간 (%) — 한글 "자간" (-5 = 5% 좁게) ↔ Word 문자 간격(pt) */
+  spacingPct?: number;
 }
 
 export interface TextRun extends RunStyle {
@@ -54,12 +56,31 @@ export interface Paragraph {
   inlines: Inline[];
 }
 
+/** 칸 테두리 선 — 한글 SOLID / DOUBLE_SLIM / NONE ↔ Word single / double / nil */
+export type LineStyle = 'none' | 'solid' | 'double';
+export interface BorderLine {
+  style: LineStyle;
+  /** 굵기 (mm) — 한글이 허용하는 값(0.12, 0.4 …)으로 맞춰진다 */
+  widthMm: number;
+  /** #RRGGBB */
+  color: string;
+}
+/** 없는 쪽은 기본 선(실선 0.12mm 검정) */
+export interface CellBorders {
+  top?: BorderLine;
+  bottom?: BorderLine;
+  left?: BorderLine;
+  right?: BorderLine;
+}
+
 export interface TableCell {
   colspan: number;
   rowspan: number;
   blocks: Paragraph[];
   /** 칸 배경색 #RRGGBB (없으면 색 없음) — HWPX borderFill 채우기 / DOCX w:shd */
   bg?: string;
+  /** 칸 테두리 (기본 선과 다른 쪽만) — HWPX borderFill 선 / DOCX w:tcBorders */
+  borders?: CellBorders;
 }
 
 /**

@@ -95,38 +95,57 @@ HTML 표의 칸에 `style="background:#색"` 을 쓰면 한글·Word 양쪽에 �
 <td style="background:#C5D9F1">머리글</td>
 ```
 
-자주 쓰는 색: 남색 `#1F3864` (흰 글자와 함께), 연파랑 `#DCE6F1`, 머리글 파랑 `#C5D9F1`, 회색 `#E7E6E6`.
+보고서에는 옅은 회색만 권장합니다: 머리행 `#EDEDED`, 합계 줄 `#F5F5F5`.
 
-### 보고서 꾸미기 (공공기관 보고서 모양)
+### 칸 테두리
 
-글자만 있는 보고서는 밋밋해 보입니다. 아래 세 가지를 쓰면 발주처·기관 보고서다운 모양이 됩니다.
-
-**제목 상자** — 칸 하나짜리 표에 색을 칠하고 큰 글자
-
-```html
-<table>
-  <tr><td style="background:#1F3864" align="center"><p align="center"><span style="color:#FFFFFF; font-size:18pt"><strong>○○ 사업 결과 보고</strong></span></p></td></tr>
-</table>
-```
-
-**정보 표** — 사업명·보고일·작성자를 칸으로 정리, 항목 이름 칸은 회색
+칸의 `style` 에 `border-top` / `border-bottom` / `border-left` / `border-right` (또는 `border`)를 쓰면 그 변의 선이 바뀝니다.
+굵기는 mm, 모양은 `solid`(실선)·`double`(겹선)·`none`(선 없음). 맞닿은 이웃 칸의 변은 자동으로 같이 맞춰집니다.
 
 ```html
-<table>
-  <tr><td width="15%" style="background:#E7E6E6" align="center"><strong>사 업 명</strong></td><td colspan="3">○○ 용역</td></tr>
-  <tr><td width="15%" style="background:#E7E6E6" align="center"><strong>보 고 일</strong></td><td width="35%">2026. ○○. ○○.</td><td width="15%" style="background:#E7E6E6" align="center"><strong>작 성</strong></td><td width="35%">○○팀</td></tr>
-</table>
+<td style="border-top:0.4mm solid #000; border-bottom:0.5mm double #000; border-left:none">머리글</td>
 ```
 
-**장 제목 막대** — 왼쪽 남색 칸에 로마 숫자, 오른쪽 연파랑 칸에 장 이름 (`## 1. 개요` 대신)
+**공문 표** — `<table data-style="공문">` (또는 맨 위 설정 `표: 공문` 이면 모든 표)
+위·아래 바깥선 0.4mm, 좌우 바깥선 없음, 첫 줄(머리행) 아래 겹선이 자동으로 들어갑니다. 칸에 직접 쓴 테두리가 우선이고, `data-style="기본"` 인 표는 그대로 둡니다.
 
-```html
+### 공공기관 보고서 모양 (권장)
+
+관공서 보고서는 **색 상자 없이 선과 글꼴로** 구분합니다. 남색 제목 상자·색 막대·파란 머리행은 쓰지 마세요 (웹 페이지처럼 보임).
+
+| 요소 | 모양 |
+|---|---|
+| 글꼴 | 제목·장 제목 **HY헤드라인M**, 본문·표 **휴먼명조** (한컴오피스 글꼴) |
+| 크기 | 제목 20~22pt, 장 제목(Ⅰ. Ⅱ.) 16pt, 본문 □ ○ 15pt, 표·주석 12pt — 이 밖의 크기는 쓰지 않음 |
+| 자간 | -5% (`자간: -5`) |
+| 제목 | 칸 하나짜리 표, 위아래 선만 (위 0.7mm · 아래 0.4mm), 아래 줄 오른쪽에 날짜·작성 부서 |
+| 표 | 공문 표, 머리행만 옅은 회색 `#EDEDED`, 합계 줄 `#F5F5F5`, 칸 안 줄 간격 130% |
+| 문장 | □ (항목) 내용 — 괄호 안 항목 이름 + 명사형 끝맺음, 한 줄에 끝나게 |
+
+```markdown
+---
+제목: ○○ 결과 보고
+글꼴: 휴먼명조
+글자크기: 15
+자간: -5
+표: 공문
+---
+
 <table>
-  <tr><td width="7%" style="background:#1F3864" align="center"><span style="color:#FFFFFF; font-size:13pt"><strong>Ⅰ</strong></span></td><td width="93%" style="background:#DCE6F1"><span style="color:#1F3864; font-size:13pt"><strong>추진 개요</strong></span></td></tr>
+  <tr><td style="border-top:0.7mm solid #1F3864; border-bottom:0.4mm solid #1F3864"><p align="center" style="margin-top:3pt; margin-bottom:3pt"><span style="font-family:HY헤드라인M; font-size:22pt">○○ 결과 보고</span></p></td></tr>
 </table>
+
+<p align="right"><span style="font-size:12pt">2026. ○○. ○○.(○) ｜ ○○팀</span></p>
+
+<p style="margin-top:10pt"><span style="font-family:HY헤드라인M; font-size:16pt">Ⅰ. 추진 개요</span></p>
+
+□ (추진 기간) 2026. ○○. ○○. ~ ○○. ○○.
+  ○ (세부 내용) …
+  ※ 참고 사항
 ```
 
-그 밖에: 표 머리글은 `#C5D9F1`, 합계 줄은 `#E7E6E6`. 표와 표 사이에는 `<p></p>` (빈 줄) 하나. 단계·절차는 개조식보다 "단계 | 주요 내용" 표가 깔끔합니다.
+표 칸 글자는 `<td align="center"><p align="center" style="line-height:130%"><span style="font-size:12pt">내용</span></p></td>` 처럼 씁니다.
+개조식 문단에 간격이 필요하면 `<p style="margin-top:5pt">○ 내용</p>` 처럼 HTML 로 써도 들여쓰기가 유지됩니다.
 
 ### 글자 색·크기·글꼴, 정렬
 
@@ -139,8 +158,9 @@ HTML 표의 칸에 `style="background:#색"` 을 쓰면 한글·Word 양쪽에 �
 <p align="right">2026. 10. 29. 기획팀</p>
 ```
 
-- 글꼴은 **맑은 고딕(기본)·바탕·돋움·굴림**을 권장합니다 (Windows 기본 글꼴이라 한글·Word 어디서나 같게 보임).
-  함초롬바탕·함초롬돋움은 한글이 깔린 PC 에만 있습니다.
+- 글꼴: **맑은 고딕(기본)·바탕·돋움·굴림**은 Windows 기본 글꼴이라 어디서나 같게 보입니다.
+  **휴먼명조·HY헤드라인M·HY견고딕·한컴돋움·함초롬체**는 한컴오피스가 깔린 PC 에만 있습니다 (한글로 제출하는 공공기관 보고서는 이쪽이 표준).
+- 자간: `<span style="letter-spacing:-0.05em">` = 자간 -5%. 문서 전체는 맨 위 설정 `자간: -5`.
 - 들여쓰기·간격이 꼭 필요하면 `<p style="margin-left:10mm; text-indent:-5mm; margin-top:6pt">` 처럼 쓸 수 있습니다.
 
 ### 문서 설정 (맨 위, 선택)
@@ -153,6 +173,8 @@ HTML 표의 칸에 `style="background:#색"` 을 쓰면 한글·Word 양쪽에 �
 글꼴: 바탕          ← 문서 전체 기본 글꼴
 글자크기: 11        ← 본문 기본 크기 (pt)
 줄간격: 160         ← % (한글 기본 160)
+자간: -5            ← % (한글 보고서는 보통 -5)
+표: 공문            ← 모든 표를 공문 표 모양으로
 ---
 ```
 

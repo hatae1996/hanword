@@ -48,6 +48,8 @@
           <select id="font-size" class="sel narrow" title="글자 크기 (pt)" aria-label="글자 크기"></select>
           <button class="tb" data-cmd="size-down" title="글자 작게 (Ctrl+[)" aria-label="글자 작게">가<sub class="step">−</sub></button>
           <button class="tb" data-cmd="size-up" title="글자 크게 (Ctrl+])" aria-label="글자 크게">가<sup class="step">+</sup></button>
+          <button class="tb" data-cmd="spacing-down" title="자간 좁게 (Alt+Shift+N) — 한글 보고서는 보통 -5%" aria-label="자간 좁게"><span class="sp-ico">가가</span><sub class="step">−</sub></button>
+          <button class="tb" data-cmd="spacing-up" title="자간 넓게 (Alt+Shift+W)" aria-label="자간 넓게"><span class="sp-ico wide">가가</span><sup class="step">+</sup></button>
         </div>
         <div class="group">
           <button class="tb b" data-cmd="bold" title="굵게 (Ctrl+B)" aria-label="굵게">가</button>
@@ -82,6 +84,9 @@
               <input id="cell-color" type="color" value="#DCE6F1" />
             </label>
             <button class="tb wide" data-cmd="cell-nocolor" title="칸 배경색 지우기">색 없음</button>
+            <select id="cell-border" class="sel border-sel" title="선택한 칸의 테두리 (여러 칸을 드래그하면 바깥·안쪽 선을 따로 적용)" aria-label="칸 테두리">
+              <option value="">테두리 ▾</option>
+            </select>
             <button class="tb wide" data-cmd="row-del" title="줄 지우기">줄−</button>
             <button class="tb wide" data-cmd="col-del" title="칸 지우기">칸−</button>
             <button class="tb wide danger" data-cmd="table-del" title="표 지우기">표 지우기</button>

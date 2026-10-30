@@ -8,6 +8,7 @@
 import type { Block, Doc, Inline, Paragraph, ParaRole, TableCell, TextRun } from './types';
 import { DEFAULT_COLOR, DEFAULT_FONT, ROLE_RUN } from './defaults';
 import { resolveRun } from './resolve';
+import { cleanBorders, resolveEdges } from './borders';
 
 const round = (v: number, step: number) => Math.round(v / step) * step;
 const close = (a: number, b: number, eps: number) => Math.abs(a - b) <= eps;
@@ -22,10 +23,11 @@ export function cleanRun(p: Paragraph, r: TextRun): TextRun {
   if (r.sizePt && !close(r.sizePt, role.sizePt, 0.01)) out.sizePt = round(r.sizePt, 0.5);
   if (r.color && r.color.toUpperCase() !== DEFAULT_COLOR) out.color = r.color.toUpperCase();
   if (r.font && r.font !== DEFAULT_FONT) out.font = r.font;
+  if (r.spacingPct && Math.round(r.spacingPct)) out.spacingPct = Math.max(-50, Math.min(50, Math.round(r.spacingPct)));
   return out;
 }
 
-const styleKey = (r: TextRun) => JSON.stringify([r.bold, r.italic, r.underline, r.strike, r.sizePt, r.color, r.font]);
+const styleKey = (r: TextRun) => JSON.stringify([r.bold, r.italic, r.underline, r.strike, r.sizePt, r.color, r.font, r.spacingPct]);
 
 function mergeInlines(list: Inline[]): Inline[] {
   const out: Inline[] = [];
@@ -84,9 +86,9 @@ export function canonical(doc: Doc): string {
     // 줄바꿈 없는 공백(U+00A0)은 화면에서 일반 공백과 같다
     inlines: mergeInlines(p.inlines.map((i) => (i.kind === 'text' ? cleanRun(p, { ...i, text: i.text.replace(/\u00A0/g, ' ') }) : i))),
   });
-  const cell = (c: TableCell) => ({ colspan: c.colspan, rowspan: c.rowspan, bg: c.bg?.toUpperCase() ?? null, blocks: c.blocks.map(para) });
+  const cell = (c: TableCell) => ({ colspan: c.colspan, rowspan: c.rowspan, bg: c.bg?.toUpperCase() ?? null, borders: cleanBorders(c.borders) ?? null, blocks: c.blocks.map(para) });
   const block = (b: Block) =>
-    b.type === 'paragraph' ? para(b) : { table: true, colWidthsMm: b.colWidthsMm.map(r1), rows: b.rows.map((r) => r.map(cell)) };
+    b.type === 'paragraph' ? para(b) : { table: true, colWidthsMm: b.colWidthsMm.map(r1), rows: resolveEdges(b).rows.map((r) => r.map(cell)) };
   const page = Object.fromEntries(Object.entries(doc.page).map(([k, v]) => [k, r1(v)]));
   return JSON.stringify({ page, blocks: doc.blocks.map(block) }, null, 1);
 }

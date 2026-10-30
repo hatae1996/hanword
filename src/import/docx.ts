@@ -6,7 +6,8 @@
  * 그림·도형·머리말/꼬리말·각주 등은 건너뛰고 warnings 에 남긴다.
  */
 import JSZip from 'jszip';
-import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaRole, TableCell, TextRun } from '../model/types';
+import type { Align, Block, BorderLine, CellBorders, Doc, Inline, PageSetup, Paragraph, ParaRole, TableCell, TextRun } from '../model/types';
+import { cleanBorders } from '../model/borders';
 import { DEFAULT_PAGE, contentWidthMm, defaultParaStyle } from '../model/defaults';
 import { cleanParagraph } from '../model/normalize';
 import { resolveRun } from '../model/resolve';
@@ -25,6 +26,8 @@ interface RProps {
   sizePt?: number;
   color?: string;
   font?: string;
+  /** 문자 간격 (twip) */
+  spacingTw?: number;
 }
 interface PProps {
   align?: Align;
@@ -74,6 +77,8 @@ function readRPr(rPr: El | undefined): RProps {
   const fonts = kid(rPr, 'rFonts');
   const font = attr(fonts, 'eastAsia') || attr(fonts, 'ascii') || attr(fonts, 'hAnsi');
   if (font) r.font = font;
+  const sp = num(attr(kid(rPr, 'spacing'), 'val'));
+  if (sp !== undefined) r.spacingTw = sp;
   return r;
 }
 
@@ -321,7 +326,8 @@ class Reader {
     const rPr = kid(r, 'rPr');
     const rStyle = this.chain(attr(kid(rPr, 'rStyle'), 'val') ?? undefined);
     const rp = merge<RProps>(baseR, rStyle.r, readRPr(rPr));
-    const style = { bold: rp.bold, italic: rp.italic, underline: rp.underline, strike: rp.strike, sizePt: rp.sizePt, color: rp.color, font: rp.font };
+    const style = { bold: rp.bold, italic: rp.italic, underline: rp.underline, strike: rp.strike, sizePt: rp.sizePt, color: rp.color, font: rp.font,
+      spacingPct: rp.spacingTw ? Math.round((rp.spacingTw / ((rp.sizePt ?? 10) * 20)) * 100) : undefined };
     for (const c of kids(r)) {
       switch (c.localName) {
         case 't': out.push({ kind: 'text', text: c.textContent ?? '', ...style }); break;
@@ -337,6 +343,8 @@ class Reader {
   }
 
   readTable(tbl: El, widthMm: number) {
+    const tblBorders = path(tbl, 'tblPr', 'tblBorders');
+    const pos = new Map<TableCell, { r: number; col: number; tcb?: El }>();
     const grid = kids(kid(tbl, 'tblGrid'), 'gridCol').map((g) => twipToMm(num(attr(g, 'w')) ?? 0));
     const rows: TableCell[][] = [];
     // 세로 병합 추적: 열 위치 → 시작 셀
@@ -361,12 +369,32 @@ class Reader {
         const cell: TableCell = { colspan: span, rowspan: 1, blocks: paras };
         const fill = attr(kid(tcPr, 'shd'), 'fill');
         if (fill && /^[0-9a-f]{6}$/i.test(fill) && fill.toUpperCase() !== 'FFFFFF') cell.bg = `#${fill.toUpperCase()}`;
+        pos.set(cell, { r: rows.length, col, tcb: kid(tcPr, 'tcBorders') });
         if (vmVal === 'restart') vOrigin.set(col, cell);
         else vOrigin.delete(col);
         row.push(cell);
         col += span;
       }
       rows.push(row);
+    }
+    // 테두리: 칸의 tcBorders 가 우선, 없으면 표의 tblBorders (가장자리 = top/bottom/left/right, 안쪽 = insideH/insideV)
+    const colCount = grid.length || Math.max(0, ...rows.map((r) => r.reduce((a, c) => a + c.colspan, 0)));
+    for (const [cell, { r, col, tcb }] of pos) {
+      const sides: CellBorders = {};
+      const edge = {
+        top: r === 0 ? 'top' : 'insideH',
+        bottom: r + cell.rowspan >= rows.length ? 'bottom' : 'insideH',
+        left: col === 0 ? 'left' : 'insideV',
+        right: col + cell.colspan >= colCount ? 'right' : 'insideV',
+      } as const;
+      for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+        const own = kid(tcb, side) ?? kid(tcb, side === 'left' ? 'start' : side === 'right' ? 'end' : side);
+        const tb = kid(tblBorders, edge[side]) ?? kid(tblBorders, edge[side] === 'left' ? 'start' : edge[side] === 'right' ? 'end' : edge[side]);
+        const line = wordBorder(own ?? tb);
+        if (line) sides[side] = line;
+      }
+      const b = cleanBorders(sides);
+      if (b) cell.borders = b;
     }
     return { type: 'table' as const, rows, colWidthsMm: normalizeWidths(grid, grid.length || Math.max(...rows.map((r) => r.reduce((a, c) => a + c.colspan, 0))), widthMm) };
   }
@@ -387,6 +415,18 @@ class Reader {
     if (attr(sz, 'orient') === 'landscape' && w < h) [w, h] = [h, w];
     return { widthMm: w, heightMm: h, marginTopMm: mt, marginBottomMm: mb, marginLeftMm: v('left'), marginRightMm: v('right'), headerMm: hd, footerMm: ft };
   }
+}
+
+/** Word 선(w:top 등) → 모델 선. 굵기 1/8pt, 0.5pt 이하(Word 기본 얇은 선)는 한글 기본 0.12mm 로 */
+function wordBorder(el: El | undefined): BorderLine | undefined {
+  if (!el) return undefined;
+  const val = (attr(el, 'val') ?? 'single').toLowerCase();
+  if (val === 'nil' || val === 'none') return { style: 'none', widthMm: 0.1, color: '#000000' };
+  const sz = num(attr(el, 'sz')) ?? 4;
+  const widthMm = sz <= 4 ? 0.12 : ((sz / 8) * 25.4) / 72;
+  const c = attr(el, 'color') ?? 'auto';
+  const color = /^[0-9a-f]{6}$/i.test(c) ? `#${c.toUpperCase()}` : '#000000';
+  return { style: val.includes('double') || val.startsWith('thinThick') || val.startsWith('thickThin') ? 'double' : 'solid', widthMm, color };
 }
 
 function descendantsHas(el: El, name: string, pred: (e: El) => boolean): boolean {

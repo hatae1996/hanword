@@ -14,6 +14,8 @@ import { setupZoom } from './editor/zoom';
 import { MarkdownPaste } from './editor/markdownPaste';
 import { Blanks, goToBlank } from './editor/blanks';
 import { sumTable } from './editor/tableSum';
+import { BORDER_PRESETS, applyBorderPreset } from './editor/cellBorders';
+import { stepLetterSpacing } from './editor/letterSpacing';
 import { FindReplace, clearFind, findState, replaceAll, replaceCurrent, setQuery, step as findStep } from './editor/findReplace';
 import { markdownToDoc } from './ai/markdown';
 import { generateJSON } from '@tiptap/html';
@@ -91,6 +93,8 @@ const commands: Record<string, () => void> = {
   'col-del': () => chain().deleteColumn().run(),
   'table-del': () => chain().deleteTable().run(),
   'cell-nocolor': () => chain().setCellAttribute('backgroundColor', null).run(),
+  'spacing-down': () => stepSpacing(-1),
+  'spacing-up': () => stepSpacing(1),
   sum: () => {
     const r = sumTable(editor);
     toast(r.message, !r.ok);
@@ -117,6 +121,21 @@ const colorInput = $<HTMLInputElement>('font-color');
 colorInput.addEventListener('input', () => {
   chain().setColor(colorInput.value).run();
   $('color-swatch').style.borderBottomColor = colorInput.value;
+});
+
+function stepSpacing(delta: number) {
+  const v = stepLetterSpacing(editor, delta);
+  if (v !== null) toast(`자간 ${v}%`);
+  editor.commands.focus();
+}
+
+const borderSel = $<HTMLSelectElement>('cell-border');
+for (const [key, p] of Object.entries(BORDER_PRESETS)) borderSel.add(new Option(p.label, key));
+borderSel.addEventListener('change', () => {
+  const key = borderSel.value;
+  borderSel.value = '';
+  if (key && !applyBorderPreset(editor, key)) toast('표 안의 칸을 선택하세요', true);
+  editor.commands.focus();
 });
 
 const cellColor = $<HTMLInputElement>('cell-color');

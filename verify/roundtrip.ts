@@ -89,6 +89,27 @@ for (const [name, json] of Object.entries(SAMPLES)) {
   same('AI 보고서: Windows 줄바꿈(CRLF·BOM)도 같은 문서', doc, crlf.doc);
 }
 
+// ── 공문 보고서 모양 (글꼴·자간·칸 테두리·공문 표) ─────────────
+{
+  const md = readFileSync(join(here, 'fixtures', '공문-보고서.md'), 'utf8');
+  const { doc, warnings } = markdownToDoc(md, nodeGenerateJSON);
+  ok('공문 보고서: 변환 경고 없음', warnings.length === 0, warnings.join(', '));
+  const tables = doc.blocks.filter((b): b is Extract<typeof b, { type: 'table' }> => b.type === 'table');
+  const title = tables[0].rows[0][0];
+  ok('공문 보고서: 제목 상자 위아래 선·좌우 선 없음', title.borders?.top?.widthMm === 0.7 && title.borders?.top?.color === '#1F3864' && title.borders?.left?.style === 'none' && title.borders?.right?.style === 'none', JSON.stringify(title.borders));
+  const head = tables[1].rows[0][0];
+  ok('공문 보고서: 공문 표 (머리행 아래 겹선, 왼쪽 바깥선 없음)', head.borders?.bottom?.style === 'double' && head.borders?.left?.style === 'none' && tables[1].rows[2][1].borders?.bottom?.widthMm === 0.4, JSON.stringify(head.borders));
+  ok('공문 보고서: data-style="기본" 표는 그대로', !tables[2].rows[0][0].borders);
+  const runs = doc.blocks.flatMap((b) => (b.type === 'paragraph' ? b.inlines : []));
+  ok('공문 보고서: 자간 -5 · 휴먼명조 · HY헤드라인M', runs.every((r) => r.kind !== 'text' || r.spacingPct === -5) && runs.some((r) => r.kind === 'text' && r.font === '휴먼명조') && tables[0].rows[0][0].blocks[0].inlines.some((r) => r.kind === 'text' && r.font === 'HY헤드라인M'));
+  const htmlGaejo = doc.blocks.find((b) => b.type === 'paragraph' && b.inlines.some((i) => i.kind === 'text' && i.text.startsWith('○ (방법)')));
+  ok('공문 보고서: HTML 문단의 개조식도 들여쓰기', htmlGaejo?.type === 'paragraph' && htmlGaejo.style.indentLeftMm === 10 && htmlGaejo.style.spaceBeforePt === 5, JSON.stringify(htmlGaejo && (htmlGaejo as any).style));
+  same('공문 보고서: 마크다운 → 한글 저장 → 열기', doc, (await readHwpx(await docToHwpx(doc))).doc);
+  same('공문 보고서: 마크다운 → Word 저장 → 열기', doc, (await readDocx(await docToDocx(doc))).doc);
+  same('공문 보고서: 문서 → 마크다운 → 문서', doc, markdownToDoc(docToMarkdown(doc), nodeGenerateJSON).doc);
+  same('공문 보고서: 편집기 거쳐 저장', doc, tiptapToDoc(docToTiptap(doc), doc.title, doc.page));
+}
+
 // ── 다른 프로그램이 만든 파일 ──────────────────────────────
 const blank = await readHwpx(readFileSync(join(here, '..', 'templates', 'blank.hwpx')));
 ok('한글이 만든 빈 문서 열기', blank.doc.blocks.length === 1 && Math.round(blank.doc.page.widthMm) === 210, JSON.stringify(blank.doc.page));

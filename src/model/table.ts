@@ -60,5 +60,7 @@ export function normalizeWidths(widths: (number | undefined)[], colCount: number
   }
   const filled = ws.map((w) => w ?? fill);
   const sum = filled.reduce((a, b) => a + b, 0);
+  // 편집기는 열 너비를 정수 px 로 다루므로 본문 폭에 맞춘 표도 열마다 1px 안쪽 오차가 생긴다 → 본문 폭으로 맞춤
+  if (!unknownCount && Math.abs(sum - totalMm) > 0.001 && Math.abs(sum - totalMm) <= colCount * 0.27) return filled.map((w) => (w / sum) * totalMm);
   return sum > totalMm + 0.5 ? filled.map((w) => (w / sum) * totalMm) : filled;
 }

@@ -234,3 +234,12 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
   .btn.ghost { padding: 0 10px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* 선 없는 칸 변: 편집할 때만 옅은 점선 (인쇄·저장에는 없음) */
+.ProseMirror td[data-bn~="top"], .ProseMirror th[data-bn~="top"] { border-top: 1px dashed #B9C6D8 !important; }
+.ProseMirror td[data-bn~="bottom"], .ProseMirror th[data-bn~="bottom"] { border-bottom: 1px dashed #B9C6D8 !important; }
+.ProseMirror td[data-bn~="left"], .ProseMirror th[data-bn~="left"] { border-left: 1px dashed #B9C6D8 !important; }
+.ProseMirror td[data-bn~="right"], .ProseMirror th[data-bn~="right"] { border-right: 1px dashed #B9C6D8 !important; }
+.sel.border-sel { min-width: 92px; }
+.tb .sp-ico { font-size: 11px; letter-spacing: -0.12em; }
+.tb .sp-ico.wide { letter-spacing: 0.08em; }

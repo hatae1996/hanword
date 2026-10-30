@@ -35,6 +35,9 @@ AI 가 마크다운으로 쓴 글을 HanWord 가 한글(.hwpx)·Word(.docx)로 �
 | 글자 크기 | **Ctrl+]** 크게 / **Ctrl+[** 작게 |
 | 화면 배율 | **Ctrl+휠**, Ctrl+= / Ctrl+- / Ctrl+0 |
 | 칸 배경색 | 표 안에서 **칸 색** / **색 없음** |
+| 칸 테두리 | 표 안에서 **테두리 ▾** — 기본 선, 선 없음, 바깥 굵게, 위·아래 선만(제목 상자), 아래 굵게/겹선, **공문 표**(표 전체). 선 없는 변은 편집 화면에만 점선으로 보임 |
+| 자간 | **Alt+Shift+N** 좁게 / **Alt+Shift+W** 넓게 (한글과 같음, 1% 씩) |
+| 보고서 글꼴 | 휴먼명조 · HY헤드라인M · HY견고딕 · 한컴돋움 (한컴오피스 글꼴) |
 | AI 글 붙여넣기 | ChatGPT·Claude 답변을 Ctrl+V → 서식으로 변환 (글자 그대로는 Ctrl+Shift+V) |
 | 저장 | Ctrl+S · 다른 이름으로 저장 Ctrl+Shift+S(표 밖) 또는 **Alt+V** (한글과 같음) |
 
@@ -101,7 +104,7 @@ powershell -ExecutionPolicy Bypass -File verify\windows\verify-in-office.ps1
 
 ## 호환성을 위해 지키는 규칙
 
-**편집기에는 양쪽에서 1:1 로 표현되는 기능만 둔다.** 현재: 글꼴, 크기, 굵게·기울임·밑줄·취소선, 글자색, 정렬, 제목 1–3, 목록, 표(가로·세로 병합, 열 너비, 칸 배경색), 문단 안 줄바꿈.
+**편집기에는 양쪽에서 1:1 로 표현되는 기능만 둔다.** 현재: 글꼴, 크기, 자간, 굵게·기울임·밑줄·취소선, 글자색, 정렬, 제목 1–3, 목록, 표(가로·세로 병합, 열 너비, 칸 배경색, 칸 테두리), 문단 안 줄바꿈.
 
 | 항목 | 한글(HWPX) | Word(DOCX) | 처리 |
 |---|---|---|---|
@@ -111,8 +114,10 @@ powershell -ExecutionPolicy Bypass -File verify\windows\verify-in-office.ps1
 | 문단 여백 | `hp:case` 와 `hp:default`(값 2배) 두 곳 | 한 곳 | 두 곳 모두 기록 |
 | 양쪽 정렬 + Shift+Enter | 줄을 늘리지 않음 | 줄을 양끝으로 늘림 | Word 에 `doNotExpandShiftReturn` |
 | 표 | 고정 열 너비, 셀 세로 가운데 | 자동 맞춤이 기본 | Word 표를 `fixed` 레이아웃·가운데 정렬로 |
-| 글꼴 | 함초롬체 기본 | 맑은 고딕 기본 | 기본 맑은 고딕, 함초롬체는 "(한글 전용)" 표시 |
+| 글꼴 | 함초롬체 기본 | 맑은 고딕 기본 | 기본 맑은 고딕, 한컴오피스 글꼴(휴먼명조 등)은 "(한글 전용)" 표시 |
 | 칸 배경색 | borderFill 의 `hc:fillBrush/winBrush faceColor` (색마다 borderFill 하나) | `w:tcPr/w:shd w:fill` | 둘 다 기록, 열 때 둘 다 읽음 |
+| 칸 테두리 | borderFill 의 left/right/top/bottomBorder (SOLID·DOUBLE_SLIM·NONE, 정해진 굵기) | `w:tcBorders` (single·double·nil, 1/8pt) | 맞닿은 칸의 변을 같게 맞춘 뒤 기록 (`borders.ts`) |
+| 자간 | charPr `spacing` (글자 크기 대비 %) | `w:spacing` (twip) | 크기 × % 로 환산 |
 | 빈 문단 높이 | 문단 글자모양 기준 | 문단 기호 서식 기준 | 둘 다 같은 글자모양 지정 |
 
 HWPX 는 XML 을 처음부터 만들지 않는다. **한글이 직접 저장한 빈 문서**(`templates/blank.hwpx`)를 열어

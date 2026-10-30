@@ -36,6 +36,7 @@ function paragraph(p: Paragraph): PMNode {
     if (i.font) ts.fontFamily = i.font;
     if (i.sizePt) ts.fontSize = `${i.sizePt}pt`;
     if (i.color) ts.color = i.color;
+    if (i.spacingPct) ts.letterSpacing = `${i.spacingPct / 100}em`;
     if (Object.keys(ts).length) marks.push({ type: 'textStyle', attrs: ts });
     content.push({ type: 'text', text: i.text, ...(marks.length ? { marks } : {}) });
   }
@@ -56,6 +57,7 @@ function table(t: Table): PMNode {
           rowspan: pc.rowspan,
           colwidth: t.colWidthsMm.slice(pc.col, pc.col + pc.colspan).map(mmToPx),
           backgroundColor: pc.cell.bg ?? null,
+          borders: pc.cell.borders ?? null,
         },
         content: pc.cell.blocks.map(paragraph),
       })),
