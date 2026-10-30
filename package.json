@@ -1,6 +1,6 @@
 {
   "name": "hanword",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "한글(HWPX)과 Word(DOCX) 모두 호환되는 문서 편집기",
   "scripts": {
     "embed": "node scripts/embed-templates.mjs",
