@@ -56,6 +56,7 @@
           <button class="tb i" data-cmd="italic" title="기울임 (Ctrl+I)" aria-label="기울임">가</button>
           <button class="tb u" data-cmd="underline" title="밑줄 (Ctrl+U)" aria-label="밑줄">가</button>
           <button class="tb s" data-cmd="strike" title="취소선" aria-label="취소선">가</button>
+          <button class="tb wide" data-cmd="format-copy" title="모양 복사 (Alt+C): 가져올 글자에서 한 번, 바꿀 곳을 선택하고 한 번 더. Esc 로 끝">모양 복사</button>
           <label class="tb color" title="글자 색" aria-label="글자 색">
             <span class="swatch" id="color-swatch">가</span>
             <input id="font-color" type="color" value="#000000" />
@@ -77,7 +78,8 @@
           <div class="table-tools" id="table-tools" hidden>
             <button class="tb wide" data-cmd="row-after" title="아래에 줄 추가">줄+</button>
             <button class="tb wide" data-cmd="col-after" title="오른쪽에 칸 추가">칸+</button>
-            <button class="tb wide" data-cmd="sum" title="합계: 더할 칸들과 합계 칸을 드래그해 선택하거나, 합계 칸에 커서를 두고 누르세요 (Ctrl+Shift+S)">∑ 합계</button>
+            <button class="tb wide" data-cmd="sum" title="합계: 더할 칸들과 합계 칸을 드래그해 선택하거나, 합계 칸에 커서를 두고 누르세요 (Ctrl+Shift+S · 가로 Ctrl+Shift+H · 세로 Ctrl+Shift+V)">∑ 합계</button>
+            <button class="tb wide" data-cmd="avg" title="평균: 합계와 같은 방법 (Ctrl+Shift+A)">평균</button>
             <button class="tb wide" data-cmd="merge" title="선택한 셀 합치기">셀 합치기</button>
             <button class="tb wide" data-cmd="split" title="셀 나누기">나누기</button>
             <label class="tb wide cellcolor" title="선택한 칸의 배경색">
@@ -124,6 +126,7 @@
         <span class="dot" aria-hidden="true">·</span>
         <span id="stat-chars">0자</span>
         <button class="blanks" id="stat-blanks" type="button" title="다음 빈칸으로 (Tab)" hidden></button>
+        <button class="blanks fmt" id="stat-fmt" type="button" title="눌러서 모양 복사 끝내기" hidden>모양 복사 중 · 선택 후 Alt+C · Esc</button>
         <span class="dot" aria-hidden="true">·</span>
         <span class="note">한글·Word 양쪽에서 똑같이 표현되는 기능만 제공합니다</span>
         <span class="toast" id="toast" role="status" aria-live="polite"></span>

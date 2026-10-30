@@ -71,7 +71,25 @@ export interface SumResult {
   message: string;
 }
 
-export function sumTable(editor: Editor): SumResult {
+export interface SumOptions {
+  /** 합계 / 평균 (한글 블록 합계 Ctrl+Shift+S, 블록 평균 Ctrl+Shift+A) */
+  op?: 'sum' | 'avg';
+  /** auto = 세로 먼저, 안 되면 가로 · col = 세로 합계(Ctrl+Shift+V) · row = 가로 합계(Ctrl+Shift+H) */
+  dir?: 'auto' | 'col' | 'row';
+}
+
+function formatValue(v: number, sources: string[], op: 'sum' | 'avg'): string {
+  if (op === 'sum') return formatSum(v, sources);
+  const base = Math.max(0, ...sources.map((s) => s.match(/\.(\d+)/)?.[1].length ?? 0));
+  const decimals = Number.isInteger(v) ? base : Math.max(base, Math.abs(v - Math.round(v * 10) / 10) < 1e-9 ? 1 : 2);
+  const useComma = Math.abs(v) >= 1000 || sources.some((s) => /\d,\d{3}/.test(s));
+  return v.toLocaleString('ko-KR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals, useGrouping: useComma });
+}
+
+export function sumTable(editor: Editor, opts: SumOptions = {}): SumResult {
+  const op = opts.op ?? 'sum';
+  const dir = opts.dir ?? 'auto';
+  const word = op === 'sum' ? '합계' : '평균';
   const { state } = editor;
   const sel = state.selection;
   let tablePos: number;
@@ -89,16 +107,16 @@ export function sumTable(editor: Editor): SumResult {
     rect = { left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) };
   } else {
     const $cell = cellAround(sel.$from);
-    if (!$cell) return { ok: false, message: '표 안에서 합계를 낼 칸을 선택하세요.' };
+    if (!$cell) return { ok: false, message: `표 안에서 ${word}를 낼 칸을 선택하세요.` };
     const table = $cell.node(-1);
     const tableStart = $cell.start(-1);
     tablePos = tableStart - 1;
     grid = gridOf(table, tableStart);
     const r = grid.map.findCell($cell.pos - tableStart);
-    // 커서 칸이 합계 칸: 같은 열의 맨 위부터 이 칸까지
-    rect = { left: r.left, right: r.left + 1, top: 0, bottom: r.bottom };
+    // 커서 칸이 합계 칸: 같은 열의 맨 위부터 이 칸까지 (가로 합계면 같은 줄의 왼쪽 끝부터)
+    rect = dir === 'row' ? { left: 0, right: r.right, top: r.top, bottom: r.top + 1 } : { left: r.left, right: r.left + 1, top: 0, bottom: r.bottom };
     const own = grid.cell($cell.pos - tableStart);
-    if (!isTarget(own.textContent)) return { ok: false, message: '합계를 넣을 칸(빈 칸 또는 ○○)에 커서를 두거나, 더할 칸들을 드래그해 선택하세요.' };
+    if (!isTarget(own.textContent)) return { ok: false, message: `${word}를 넣을 칸(빈 칸 또는 ○○)에 커서를 두거나, 계산할 칸들을 드래그해 선택하세요.` };
   }
   void tablePos;
 
@@ -120,19 +138,20 @@ export function sumTable(editor: Editor): SumResult {
         sources.push(t);
       }
     }
-    return sources.length ? { target, sum, sources } : null;
+    if (!sources.length) return null;
+    return { target, sum: op === 'avg' ? sum / sources.length : sum, sources };
   };
 
   const jobs: { target: number; sum: number; sources: string[] }[] = [];
   // 세로 합계: 열마다 맨 아래 칸이 대상
-  for (let c = left; c < right; c++) {
+  for (let c = left; c < right && dir !== 'row'; c++) {
     const cells: number[] = [];
     for (let r = top; r < bottom; r++) cells.push(grid.at(r, c));
     const j = line(cells);
     if (j && !jobs.some((x) => x.target === j.target)) jobs.push(j);
   }
   // 세로로 넣을 데가 없으면 가로 합계: 줄마다 맨 오른쪽 칸이 대상
-  if (!jobs.length) {
+  if (!jobs.length && dir !== 'col') {
     for (let r = top; r < bottom; r++) {
       const cells: number[] = [];
       for (let c = left; c < right; c++) cells.push(grid.at(r, c));
@@ -146,15 +165,16 @@ export function sumTable(editor: Editor): SumResult {
     const all = new Set<number>();
     for (let r = top; r < bottom; r++) for (let c = left; c < right; c++) all.add(grid.at(r, c));
     const nums = [...all].map((p) => textAt(p)).filter((t) => cellNumber(t) !== null);
-    if (!nums.length) return { ok: false, message: '선택한 칸에 더할 숫자가 없습니다.' };
+    if (!nums.length) return { ok: false, message: '선택한 칸에 계산할 숫자가 없습니다.' };
     const total = nums.reduce((s, t) => s + cellNumber(t)!, 0);
-    return { ok: false, message: `선택한 숫자 ${nums.length}개의 합계: ${formatSum(total, nums)} — 합계를 넣으려면 빈 칸(또는 ○○)까지 함께 선택하세요.` };
+    const v = op === 'avg' ? total / nums.length : total;
+    return { ok: false, message: `선택한 숫자 ${nums.length}개의 ${word}: ${formatValue(v, nums, op)} — ${word}를 넣으려면 빈 칸(또는 ○○)까지 함께 선택하세요.` };
   }
 
   const tr = state.tr;
   // 문서 뒤쪽 칸부터 바꿔야 앞쪽 위치가 어긋나지 않는다
-  for (const j of [...jobs].sort((a, b) => b.target - a.target)) writeCell(editor, tr, grid.tableStart + j.target, formatSum(j.sum, j.sources));
+  for (const j of [...jobs].sort((a, b) => b.target - a.target)) writeCell(editor, tr, grid.tableStart + j.target, formatValue(j.sum, j.sources, op));
   editor.view.dispatch(tr.scrollIntoView());
-  const desc = jobs.map((j) => formatSum(j.sum, j.sources)).join(', ');
-  return { ok: true, message: `합계를 넣었습니다: ${desc}` };
+  const desc = jobs.map((j) => formatValue(j.sum, j.sources, op)).join(', ');
+  return { ok: true, message: `${dir === 'row' ? '가로 ' : dir === 'col' ? '세로 ' : ''}${word}를 넣었습니다: ${desc}` };
 }

@@ -1,5 +1,9 @@
 # 변경 기록
 
+## v0.9.0 (2026-10-30)
+
+- 한글 손에 맞게: 모양 복사(Alt+C 글자·문단·칸, Esc 까지 연속 · Ctrl+Alt+C/V), 한글 표 단축키(F5 칸 선택, M 합치기·S 나누기, Alt+Insert/Delete, Ctrl+Enter, Ctrl+Backspace), 표 평균 Ctrl+Shift+A · 가로 합계 Ctrl+Shift+H · 세로 합계 Ctrl+Shift+V
+
 ## v0.8.0 (2026-10-30)
 
 - 보고서 빨리 쓰기: / 부품 메뉴(제목 상자·장 제목 자동 번호·□○-※·공문 표·단위·절차 표·붙임), 상용구(Alt+I 등록·펼치기, Ctrl+F3 목록), 개조식 자동 입력(Enter 이어쓰기, Ctrl+숫자판−/+ · Alt+Shift+→/← 단계)

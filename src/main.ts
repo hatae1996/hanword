@@ -19,6 +19,8 @@ import { stepLetterSpacing } from './editor/letterSpacing';
 import { FindReplace, clearFind, findState, replaceAll, replaceCurrent, setQuery, step as findStep } from './editor/findReplace';
 import { markdownToDoc } from './ai/markdown';
 import { Gaejo } from './editor/gaejo';
+import { TableKeys } from './editor/tableKeys';
+import { clearFormatCopy, formatCopy, formatCopyAll, formatPaste, onFormatCopyChange } from './editor/formatCopy';
 import { SlashMenu } from './editor/slashMenu';
 import { expandSnippet, openSnippetList, registerSnippet, reportParts, snippetItems } from './editor/parts';
 import { generateJSON } from '@tiptap/html';
@@ -44,6 +46,7 @@ const editor = new Editor({
     Blanks.configure({ onCount: (n) => queueMicrotask(() => showBlanks(n)) }),
     FindReplace,
     Gaejo,
+    TableKeys.configure({ calc: (o) => calc(o) }),
     SlashMenu.configure({ items: () => [...reportParts(), ...snippetItems()] }),
     MarkdownPaste.configure({
       onConverted: (w) =>
@@ -107,11 +110,9 @@ const commands: Record<string, () => void> = {
     if ($from.parent.textContent.trim()) c.splitBlock();
     c.insertContent('/').run();
   },
-  sum: () => {
-    const r = sumTable(editor);
-    toast(r.message, !r.ok);
-    editor.commands.focus();
-  },
+  sum: () => calc({ op: 'sum' }),
+  avg: () => calc({ op: 'avg' }),
+  'format-copy': () => void formatCopy(editor, toast),
 };
 document.querySelectorAll<HTMLButtonElement>('[data-cmd]').forEach((b) => {
   b.type = 'button';
@@ -134,6 +135,12 @@ colorInput.addEventListener('input', () => {
   chain().setColor(colorInput.value).run();
   $('color-swatch').style.borderBottomColor = colorInput.value;
 });
+
+function calc(opts: Parameters<typeof sumTable>[1]) {
+  const r = sumTable(editor, opts);
+  toast(r.message, !r.ok);
+  editor.commands.focus();
+}
 
 function stepSpacing(delta: number) {
   const v = stepLetterSpacing(editor, delta);
@@ -403,6 +410,22 @@ window.addEventListener('keydown', (e) => {
     void openSnippetList(editor);
     return;
   }
+  // 모양 복사: Alt+C (한글), Ctrl+Alt+C / Ctrl+Alt+V (Word)
+  if (e.code === 'KeyC' && e.altKey && !e.shiftKey && !e.metaKey) {
+    e.preventDefault();
+    if (e.ctrlKey) formatCopyAll(editor, toast);
+    else void formatCopy(editor, toast);
+    return;
+  }
+  if (e.code === 'KeyV' && e.altKey && e.ctrlKey && !e.shiftKey) {
+    e.preventDefault();
+    formatPaste(editor, toast);
+    return;
+  }
+  if (e.key === 'Escape' && !document.querySelector('dialog[open]') && clearFormatCopy()) {
+    toast('모양 복사를 끝냈습니다');
+    return;
+  }
   // 한글 단축키: Alt+V 다른 이름으로 저장
   if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'KeyV' || e.key.toLowerCase() === 'v')) {
     e.preventDefault();
@@ -413,8 +436,8 @@ window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (k === 's' || e.code === 'KeyS') {
     e.preventDefault();
-    // 한글처럼 표 안에서 Ctrl+Shift+S 는 블록 합계, 표 밖에서는 다른 이름으로 저장
-    if (e.shiftKey && editor.isActive('table')) commands.sum();
+    // 표 안의 Ctrl+Shift+S 는 블록 합계 (편집기 tableKeys 가 먼저 처리), 표 밖에서는 다른 이름으로 저장
+    if (e.shiftKey && editor.isActive('table')) return;
     else if (e.shiftKey) void saveAs(state.format ?? 'hwpx');
     else void saveCurrent();
   } else if (k === 'f' || e.code === 'KeyF') {
@@ -439,6 +462,11 @@ function showBlanks(n: number) {
   b.textContent = `빈칸 ${n}개 · Tab`;
 }
 $('stat-blanks').addEventListener('click', () => goToBlank(editor, 1));
+onFormatCopyChange((on) => ($('stat-fmt').hidden = !on));
+$('stat-fmt').addEventListener('click', () => {
+  clearFormatCopy();
+  toast('모양 복사를 끝냈습니다');
+});
 
 // ── 찾기·바꾸기 ───────────────────────────────────────────
 const findbar = $('findbar');
