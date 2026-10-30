@@ -8,7 +8,10 @@ import {
   AlignmentType,
   BorderStyle,
   Document,
+  Footer,
+  Header,
   HeadingLevel,
+  PageNumber,
   LineRuleType,
   Packer,
   Paragraph as DParagraph,
@@ -92,8 +95,30 @@ function paragraph(p: Paragraph): DParagraph {
       lineRule: LineRuleType.AT_LEAST,
     },
     run: { font: fontSet(empty.font), size: ptToHalfPt(empty.sizePt), bold: empty.bold },
+    pageBreakBefore: p.pageBreak || undefined,
   };
   return new DParagraph(opts);
+}
+
+/** 쪽 번호 문단: "- 1 -" (PAGE 필드) */
+function pageNumberParagraph(pn: NonNullable<Doc['pageNumber']>): DParagraph {
+  const run = { font: fontSet(DEFAULT_FONT), size: ptToHalfPt(DEFAULT_SIZE_PT) };
+  const children = [
+    ...(pn.dash ? [new DTextRun({ ...run, text: '- ' })] : []),
+    new DTextRun({ ...run, children: [PageNumber.CURRENT] }),
+    ...(pn.dash ? [new DTextRun({ ...run, text: ' -' })] : []),
+  ];
+  return new DParagraph({ alignment: pn.pos.endsWith('right') ? AlignmentType.RIGHT : AlignmentType.CENTER, children, spacing: { before: 0, after: 0 } });
+}
+
+function headersFooters(doc: Doc) {
+  const pn = doc.pageNumber;
+  const top = [...(doc.header ?? []).map(paragraph), ...(pn && pn.pos.startsWith('top') ? [pageNumberParagraph(pn)] : [])];
+  const bottom = [...(doc.footer ?? []).map(paragraph), ...(pn && pn.pos.startsWith('bottom') ? [pageNumberParagraph(pn)] : [])];
+  return {
+    ...(top.length ? { headers: { default: new Header({ children: top }) } } : {}),
+    ...(bottom.length ? { footers: { default: new Footer({ children: bottom }) } } : {}),
+  };
 }
 
 /** 칸 테두리 한 변 → Word 선 (선 없음은 nil 로 표 기본 선을 덮어씀) */
@@ -171,6 +196,7 @@ export async function docToDocx(doc: Doc): Promise<Uint8Array> {
             margin: { top: pg.top, bottom: pg.bottom, left: pg.left, right: pg.right, header: pg.header, footer: pg.footer, gutter: 0 },
           },
         },
+        ...headersFooters(doc),
         children: doc.blocks.map((b) => (b.type === 'paragraph' ? paragraph(b) : table(b))),
       },
     ],

@@ -117,6 +117,17 @@ export const ParagraphFormat = Extension.create({
           spaceBefore: numAttr('space-before', (v) => `margin-top: ${v}pt`, stylePt('margin-top')),
           spaceAfter: numAttr('space-after', (v) => `margin-bottom: ${v}pt`, stylePt('margin-bottom')),
           lineHeight: numAttr('line-height', (v) => `line-height: ${v / 100}`, lineHeightPct),
+          // 쪽 나누기: 이 문단은 새 쪽에서 시작 (편집 화면에는 점선 + "쪽 나누기" 표시)
+          pageBreak: {
+            default: false,
+            keepOnSplit: false,
+            parseHTML: (el: HTMLElement) => {
+              if (el.hasAttribute('data-page-break')) return true;
+              const st = (el.getAttribute('style') ?? '').toLowerCase();
+              return /page-break-before\s*:\s*always|break-before\s*:\s*page/.test(st);
+            },
+            renderHTML: (attrs: Record<string, any>) => (attrs.pageBreak ? { 'data-page-break': '', class: 'hw-page-break' } : {}),
+          },
         },
       },
     ];

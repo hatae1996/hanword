@@ -12,7 +12,7 @@
  *  - 맨 위 설정: ---\n제목: …\n용지: A4 가로\n여백: 20 30 15 30\n글꼴: 바탕\n글자크기: 11\n---
  */
 import { Marked, type Tokens } from 'marked';
-import type { Block, Doc, Inline, PageSetup, Paragraph, Table, TextRun } from '../model/types';
+import type { Align, Block, Doc, Inline, PageNumber, PageSetup, Paragraph, Table, TextRun } from '../model/types';
 import { DEFAULT_FONT, DEFAULT_PAGE, ROLE_RUN, contentWidthMm, defaultParaStyle } from '../model/defaults';
 import { cleanRun } from '../model/normalize';
 import { tiptapToDoc, type PMNode } from '../model/fromTiptap';
@@ -31,6 +31,24 @@ export interface MdMeta {
   spacingPct?: number;
   /** 모든 표의 모양 ("공문") */
   tableStyle?: string;
+  /** 쪽 번호 / 머리말 / 꼬리말 */
+  pageNumber?: PageNumber;
+  header?: { text: string; align: Align };
+  footer?: { text: string; align: Align };
+}
+
+const ALIGN_WORD: Record<string, Align> = { 왼쪽: 'left', 가운데: 'center', 오른쪽: 'right', left: 'left', center: 'center', right: 'right' };
+const ALIGN_NAME: Record<Align, string> = { left: '왼쪽', center: '가운데', right: '오른쪽', justify: '왼쪽' };
+/** "[오른쪽] ○○기관" → 정렬 + 글자 */
+function parseHeaderLine(v: string): { text: string; align: Align } {
+  const m = v.match(/^\s*\[(왼쪽|가운데|오른쪽|left|center|right)\]\s*(.*)$/i);
+  return m ? { align: ALIGN_WORD[m[1].toLowerCase()] ?? 'left', text: m[2] } : { align: 'left', text: v.trim() };
+}
+function parsePageNumber(v: string): PageNumber | undefined {
+  if (/없음|none|off/i.test(v)) return undefined;
+  const top = /위|top/i.test(v);
+  const right = /오른|right/i.test(v);
+  return { pos: `${top ? 'top' : 'bottom'}-${right ? 'right' : 'center'}`, dash: !/숫자만|줄표\s*없/.test(v) };
 }
 
 // ── 개조식 ───────────────────────────────────────────────
@@ -73,6 +91,9 @@ function parseFrontMatter(md: string): { meta: MdMeta; body: string } {
     else if (['글자크기', '글자 크기', 'size', 'fontsize'].includes(key)) meta.sizePt = parseFloat(val) || undefined;
     else if (['줄간격', '줄 간격', 'line', 'linespacing'].includes(key)) meta.linePct = parseFloat(val) || undefined;
     else if (['표', '표모양', '표 모양', 'table'].includes(key)) meta.tableStyle = val;
+    else if (['쪽번호', '쪽 번호', 'pagenumber', 'page'].includes(key)) meta.pageNumber = parsePageNumber(val);
+    else if (['머리말', 'header'].includes(key)) meta.header = parseHeaderLine(val);
+    else if (['꼬리말', 'footer'].includes(key)) meta.footer = parseHeaderLine(val);
     else if (['자간', 'letterspacing', 'spacing'].includes(key)) meta.spacingPct = Math.round(parseFloat(val)) || undefined;
   }
   return { meta, body: md.slice(m[0].length) };
@@ -316,6 +337,10 @@ export function markdownToDoc(md: string, generateJSON: GenerateJSON, fallbackTi
   const json = generateJSON(html);
   const doc = tiptapToDoc(json, meta.title || fallbackTitle, pageFromMeta(meta));
   applyMetaDefaults(doc.blocks, meta);
+  const hf = (h: { text: string; align: Align }): Paragraph[] => [{ type: 'paragraph', role: 'body', style: { ...defaultParaStyle(), align: h.align }, inlines: [{ kind: 'text', text: h.text }] }];
+  if (meta.header?.text) doc.header = hf(meta.header);
+  if (meta.footer?.text) doc.footer = hf(meta.footer);
+  if (meta.pageNumber) doc.pageNumber = meta.pageNumber;
   return { doc, warnings };
 }
 
@@ -379,6 +404,7 @@ function paraNeedsHtml(p: Paragraph): boolean {
     Math.abs(s.spaceBeforePt - d.spaceBeforePt) > 0.05 ||
     Math.abs(s.spaceAfterPt - d.spaceAfterPt) > 0.05 ||
     Math.abs(s.lineSpacingPct - d.lineSpacingPct) > 0.5 ||
+    !!p.pageBreak ||
     !p.inlines.some((i) => i.kind === 'text' && i.text.trim())
   );
 }
@@ -393,6 +419,7 @@ function paraStyleCss(p: Paragraph): string {
   if (Math.abs(s.spaceBeforePt - d.spaceBeforePt) > 0.05) css.push(`margin-top:${+s.spaceBeforePt.toFixed(1)}pt`);
   if (Math.abs(s.spaceAfterPt - d.spaceAfterPt) > 0.05) css.push(`margin-bottom:${+s.spaceAfterPt.toFixed(1)}pt`);
   if (Math.abs(s.lineSpacingPct - d.lineSpacingPct) > 0.5) css.push(`line-height:${Math.round(s.lineSpacingPct)}%`);
+  if (p.pageBreak) css.push('page-break-before:always');
   return css.join('; ');
 }
 
@@ -403,7 +430,7 @@ function paraToHtml(p: Paragraph, tag = p.role === 'body' ? 'p' : `h${p.role.sli
 
 /** 개조식 규칙(markdownToHtml)으로 만든 모양과 정확히 같은 문단인지 — 그렇다면 "○ 내용" 한 줄로 되돌릴 수 있다 */
 function isGaejo(p: Paragraph): boolean {
-  if (p.role !== 'body' || p.style.align !== 'left') return false;
+  if (p.role !== 'body' || p.style.align !== 'left' || p.pageBreak) return false;
   const first = p.inlines.find((i) => i.kind === 'text' && i.text) as TextRun | undefined;
   const level = first && !/^\s/.test(first.text) ? gaejoLevel(first.text) : null;
   if (level === null) return false;
@@ -467,6 +494,17 @@ export function docToMarkdown(doc: Doc): string {
   ) {
     const f = (n: number) => +n.toFixed(1);
     meta.push(`여백: ${f(p.marginTopMm + p.headerMm)} ${f(p.marginRightMm)} ${f(p.marginBottomMm + p.footerMm)} ${f(p.marginLeftMm)}`);
+  }
+  const line = (ps: Paragraph[]) => {
+    const text = ps.map((x) => x.inlines.map((i) => (i.kind === 'text' ? i.text : ' ')).join('')).join(' ').trim();
+    const al = ps[0]?.style.align ?? 'left';
+    return al === 'left' || al === 'justify' ? text : `[${ALIGN_NAME[al]}] ${text}`;
+  };
+  if (doc.header?.length) meta.push(`머리말: ${line(doc.header)}`);
+  if (doc.footer?.length) meta.push(`꼬리말: ${line(doc.footer)}`);
+  if (doc.pageNumber) {
+    const pn = doc.pageNumber;
+    meta.push(`쪽번호: ${pn.pos.startsWith('top') ? '위' : '아래'} ${pn.pos.endsWith('right') ? '오른쪽' : '가운데'}${pn.dash ? '' : ' (숫자만)'}`);
   }
   if (meta.length) lines.push('---', ...meta, '---', '');
   for (const b of doc.blocks) {

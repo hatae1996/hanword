@@ -20,7 +20,7 @@ import { docToDocx } from '../src/export/docx';
 import { readHwpx } from '../src/import/hwpx';
 import { readDocx } from '../src/import/docx';
 import type { Doc } from '../src/model/types';
-import { SAMPLES } from './samples';
+import { SAMPLES, SAMPLE_EXTRAS } from './samples';
 import { docToMarkdown, markdownToDoc } from '../src/ai/markdown';
 import { nodeGenerateJSON } from '../src/ai/node';
 
@@ -48,8 +48,11 @@ function ok(label: string, cond: boolean, detail = '') {
   console.log(`${cond ? '✅' : '❌'} ${label}${!cond && detail ? ` — ${detail}` : ''}`);
 }
 
+/** 편집기 JSON 에 없는 문서 단위 설정(머리말·쪽 번호)을 붙인다 — 앱의 currentDoc() 과 같음 */
+const extrasOf = (d: Doc) => ({ ...(d.header ? { header: d.header } : {}), ...(d.footer ? { footer: d.footer } : {}), ...(d.pageNumber ? { pageNumber: d.pageNumber } : {}) });
+
 for (const [name, json] of Object.entries(SAMPLES)) {
-  const d0 = tiptapToDoc(json as any, name);
+  const d0 = { ...tiptapToDoc(json as any, name), ...(SAMPLE_EXTRAS[name] ?? {}) };
 
   const h = await readHwpx(await docToHwpx(d0), name);
   same(`${name}: 저장(HWPX) → 열기`, d0, h.doc);
@@ -62,7 +65,7 @@ for (const [name, json] of Object.entries(SAMPLES)) {
   same(`${name}: HWPX 로 연 문서 → DOCX 저장 → 열기`, d0, (await readDocx(await docToDocx(h.doc))).doc);
   same(`${name}: DOCX 로 연 문서 → HWPX 저장 → 열기`, d0, (await readHwpx(await docToHwpx(x.doc))).doc);
 
-  same(`${name}: 연 문서 → 편집기 → 저장용 문서`, d0, tiptapToDoc(docToTiptap(h.doc) as any, name, h.doc.page));
+  same(`${name}: 연 문서 → 편집기 → 저장용 문서`, d0, { ...tiptapToDoc(docToTiptap(h.doc) as any, name, h.doc.page), ...extrasOf(h.doc) });
 
   // AI 연동: 문서 → 마크다운 → 문서 (AI 가 한글 문서를 읽고 다시 쓰는 경로)
   same(`${name}: 문서 → 마크다운 → 문서`, d0, markdownToDoc(docToMarkdown(d0), nodeGenerateJSON).doc);

@@ -8,12 +8,13 @@
 import type { Editor, JSONContent } from '@tiptap/core';
 import { markdownToHtml } from '../ai/markdown';
 import type { MenuItem } from './slashMenu';
-import { GAEJO_SYMBOLS } from './gaejo';
+import { CHAPTER_RE, GAEJO_SYMBOLS } from './gaejo';
+import { buildOutline } from './outline';
+import { insertPageBreak } from './pageBreak';
 import { GAEJO_HANG_MM, GAEJO_STEP_MM } from '../ai/markdown';
 import { listDialog, promptDialog } from '../ui/dialog';
 
 const ROMAN = ['Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ', 'Ⅵ', 'Ⅶ', 'Ⅷ', 'Ⅸ', 'Ⅹ'];
-export const CHAPTER_RE = /^\s*([ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*\.\s*\S/;
 
 /** 커서 앞에 있는 장 제목(Ⅰ. Ⅱ.) 수 → 다음 번호 */
 function nextRoman(editor: Editor, pos: number): string {
@@ -79,6 +80,36 @@ export function reportParts(): MenuItem[] {
       run: (ed, r) => {
         const cells = ['①', '②', '③', '④'].map((n) => `<td width="25%" align="center" style="background:#F2F2F2"><span style="font-size:12pt">${n} ○○</span></td>`).join('');
         insertHtmlAt(ed, r, md(`<table data-style="기본"><tr>${cells}</tr></table>`));
+      },
+    },
+    {
+      group: G, label: '쪽 나누기', hint: '다음 내용을 새 쪽에서 (Ctrl+Enter)', keywords: '쪽 나누기 page break 새 쪽',
+      run: (ed, r) => {
+        ed.chain().focus().deleteRange(r).run();
+        insertPageBreak(ed);
+      },
+    },
+    {
+      group: G, label: '차례 만들기', hint: '장 제목(Ⅰ. Ⅱ.)·제목으로 목차, 뒤는 새 쪽', keywords: '차례 목차 toc',
+      run: (ed, r) => {
+        ed.chain().focus().deleteRange(r).run();
+        const items = buildOutline(ed.state.doc).filter((it) => it.kind !== 'item');
+        if (!items.length) return;
+        const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        const lines = items.map((it) => `<p style="margin-left:${it.level * 8}mm; line-height:200%"><span style="font-size:13pt">${esc(it.text)}</span></p>`).join('');
+        const html = md(`<p align="center" style="margin-bottom:12pt"><span style="font-family:HY헤드라인M; font-size:18pt">차    례</span></p>${lines}`);
+        ed.chain().focus().insertContent(html).run();
+        // 차례 다음 내용을 새 쪽에서: 바로 다음 문단에 쪽 나누기 (커서가 빈 줄이면 그 줄은 지움)
+        const { $from } = ed.state.selection;
+        const next = $from.depth ? ed.state.doc.nodeAt($from.after()) : null;
+        if (next && (next.type.name === 'paragraph' || next.type.name === 'heading')) {
+          ed.commands.command(({ tr }) => {
+            const at = $from.after();
+            tr.setNodeMarkup(at, undefined, { ...next.attrs, pageBreak: true });
+            if (!$from.parent.textContent) tr.delete($from.before(), at); // 남은 빈 줄
+            return true;
+          });
+        } else insertPageBreak(ed);
       },
     },
     {

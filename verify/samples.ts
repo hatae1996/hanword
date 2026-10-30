@@ -15,6 +15,7 @@ const cell = (text: string, attrs: N = {}, marks: N[] = []): N => ({
 });
 const row = (...cells: N[]): N => ({ type: 'tableRow', content: cells });
 const doc = (...content: N[]): N => ({ type: 'doc', content });
+import type { Doc } from '../src/model/types';
 
 export const SAMPLES: Record<string, N> = {
   '01-서식': doc(
@@ -108,4 +109,20 @@ export const SAMPLES: Record<string, N> = {
       ],
     },
   ),
+  // 쪽 나누기 + 머리말·꼬리말·쪽 번호 (문서 단위 설정은 SAMPLE_EXTRAS)
+  '05-쪽': doc(
+    p([t('첫 쪽 본문')]),
+    { type: 'paragraph', attrs: { textAlign: null, pageBreak: true }, content: [t('둘째 쪽은 이 문단부터')] },
+    p([t('둘째 쪽 본문')]),
+    { type: 'heading', attrs: { level: 1, textAlign: null, pageBreak: true }, content: [t('셋째 쪽 제목')] },
+    p([t('끝')]),
+  ),
+};
+
+const hf = (text: string, align: 'left' | 'center' | 'right') => [
+  { type: 'paragraph' as const, role: 'body' as const, style: { align, indentLeftMm: 0, firstLineMm: 0, spaceBeforePt: 0, spaceAfterPt: 0, lineSpacingPct: 160 }, inlines: [{ kind: 'text' as const, text }] },
+];
+/** 편집기 문서(JSON) 밖에 있는 문서 단위 설정 */
+export const SAMPLE_EXTRAS: Record<string, Partial<Doc>> = {
+  '05-쪽': { header: hf('○○기관 기록관', 'right'), footer: hf('대외비 아님', 'left'), pageNumber: { pos: 'bottom-center', dash: true } },
 };

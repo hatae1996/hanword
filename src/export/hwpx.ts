@@ -241,11 +241,24 @@ class SectionBuilder {
     }
     // 빈 문단도 글자 크기만큼 높이를 갖도록 해당 글자모양의 빈 run 을 둔다
     if (!runs) runs = `<hp:run charPrIDRef="${lastChar}"><hp:t/></hp:run>`;
-    return this.p(ppr, prefixRun + runs, styleId);
+    return this.p(ppr, prefixRun + runs, styleId, !!p.pageBreak);
   }
 
-  private p(paraPrId: number, inner: string, styleId = 0): string {
-    return `<hp:p id="${this.nextParaId++}" paraPrIDRef="${paraPrId}" styleIDRef="${styleId}" pageBreak="0" columnBreak="0" merged="0">${inner}</hp:p>`;
+  private p(paraPrId: number, inner: string, styleId = 0, pageBreak = false): string {
+    return `<hp:p id="${this.nextParaId++}" paraPrIDRef="${paraPrId}" styleIDRef="${styleId}" pageBreak="${pageBreak ? 1 : 0}" columnBreak="0" merged="0">${inner}</hp:p>`;
+  }
+
+  /** 머리말/꼬리말 컨트롤 (한글이 저장하는 모양: 첫 문단의 구역 설정 run 안) */
+  headerFooter(kind: 'header' | 'footer', paras: Paragraph[], doc: Doc): string {
+    const id = kind === 'header' ? 1000000101 : 1000000102;
+    const w = mmToHwp(doc.page.widthMm - doc.page.marginLeftMm - doc.page.marginRightMm);
+    const h = mmToHwp(kind === 'header' ? doc.page.headerMm : doc.page.footerMm);
+    const body = paras.map((p) => this.paragraph(p)).join('');
+    return (
+      `<hp:ctrl><hp:${kind} id="${id}" applyPageType="BOTH">` +
+      `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="${kind === 'header' ? 'TOP' : 'BOTTOM'}" linkListIDRef="0" linkListNextIDRef="0" textWidth="${w}" textHeight="${h}" hasTextRef="0" hasNumRef="0">${body}</hp:subList>` +
+      `</hp:${kind}></hp:ctrl>`
+    );
   }
 
   table(table: Table, prefixRun = ''): string {
@@ -334,10 +347,17 @@ export async function docToHwpx(doc: Doc, now = new Date()): Promise<Uint8Array>
   const rootOpen = sectionTpl.match(/^[\s\S]*?<hs:sec[^>]*>/)?.[0];
   const secRunTpl = sectionTpl.match(/<hp:run charPrIDRef="\d+"><hp:secPr[\s\S]*?<\/hp:ctrl><\/hp:run>/)?.[0];
   if (!rootOpen || !secRunTpl) throw new Error('템플릿 section0.xml 구조를 읽을 수 없습니다');
-  const secRun = applyPage(secRunTpl, doc);
-
   const hb = new HeaderBuilder(headerTpl);
   const sb = new SectionBuilder(hb);
+  // 쪽 번호(한글 "쪽 번호 매기기")·머리말·꼬리말은 첫 문단의 구역 설정 run 끝에 붙는다
+  let extra = '';
+  if (doc.header?.length) extra += sb.headerFooter('header', doc.header, doc);
+  if (doc.footer?.length) extra += sb.headerFooter('footer', doc.footer, doc);
+  if (doc.pageNumber) {
+    const pos = { 'bottom-center': 'BOTTOM_CENTER', 'bottom-right': 'BOTTOM_RIGHT', 'top-center': 'TOP_CENTER', 'top-right': 'TOP_RIGHT' }[doc.pageNumber.pos];
+    extra += `<hp:ctrl><hp:pageNum pos="${pos}" formatType="DIGIT" sideChar="${doc.pageNumber.dash ? '-' : ''}"/></hp:ctrl>`;
+  }
+  const secRun = applyPage(secRunTpl, doc).replace(/<\/hp:run>$/, `${extra}</hp:run>`);
   const body = doc.blocks
     .map((b, i) => {
       const prefix = i === 0 ? secRun : '';

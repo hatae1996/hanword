@@ -8,8 +8,7 @@
 import type { Editor } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
-import { CHAPTER_RE } from './parts';
-import { markerOf } from './gaejo';
+import { CHAPTER_RE, markerOf } from './gaejo';
 
 export interface OutlineItem {
   /** 문서 맨 위 블록의 시작 위치 */

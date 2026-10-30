@@ -12,6 +12,9 @@ import { Plugin, TextSelection } from '@tiptap/pm/state';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { GAEJO_HANG_MM, GAEJO_STEP_MM } from '../ai/markdown';
 
+/** 장 제목: Ⅰ. Ⅱ. … */
+export const CHAPTER_RE = /^\s*([ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*\.\s*\S/;
+
 /** 단계별 기호 (공문서 관례) */
 export const GAEJO_SYMBOLS = ['□', '○', '-', '·'] as const;
 /** 읽을 때 인정하는 기호 → 단계 */

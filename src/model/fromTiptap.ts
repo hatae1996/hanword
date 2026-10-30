@@ -108,7 +108,9 @@ function toParagraph(node: PMNode, role: ParaRole): Paragraph {
     if (child.type === 'hardBreak') inlines.push({ kind: 'break' });
     else if (child.type === 'text' && child.text) inlines.push({ kind: 'text', text: child.text, ...marksToStyle(child.marks) });
   }
-  return { type: 'paragraph', role, style, inlines };
+  const para: Paragraph = { type: 'paragraph', role, style, inlines };
+  if (a.pageBreak) para.pageBreak = true;
+  return para;
 }
 
 export function parseFontSizePt(v: unknown): number | undefined {

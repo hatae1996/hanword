@@ -5,12 +5,12 @@
  * 지원하지 않는 요소(그림, 도형, 수식, 머리말/꼬리말, 각주 …)는 건너뛰고 warnings 에 남긴다.
  */
 import JSZip from 'jszip';
-import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaStyle, Table, TableCell, TextRun, CellBorders, LineStyle } from '../model/types';
+import type { Align, Block, Doc, Inline, PageSetup, Paragraph, ParaStyle, Table, TableCell, TextRun, CellBorders, LineStyle, PageNumber } from '../model/types';
 import { cleanBorders } from '../model/borders';
 import { DEFAULT_PAGE, contentWidthMm, defaultParaStyle } from '../model/defaults';
 import { cleanParagraph } from '../model/normalize';
 import { normalizeWidths, placeCells } from '../model/table';
-import { attr, kid, kids, num, parseXml, type El } from './xml';
+import { attr, descendants, kid, kids, num, parseXml, type El } from './xml';
 
 export interface ImportResult {
   doc: Doc;
@@ -148,14 +148,44 @@ class Reader {
   }
 
   /** 문단 하나 → 블록들 (문단 안의 표는 별도 블록으로 분리) */
+  header?: Paragraph[];
+  footer?: Paragraph[];
+  pageNumber?: PageNumber;
+
+  /** 머리말/꼬리말: 쪽 번호 자동 번호(autoNum PAGE)가 든 문단은 쪽 번호로 바꾸고 나머지는 문단으로 */
+  readHeaderFooter(el: El, kind: 'header' | 'footer') {
+    if (this[kind]) return; // 같은 머리말이 여러 곳에 적힌 파일(python-hwpx 등)
+    const paras: Paragraph[] = [];
+    for (const p of kids(kid(el, 'subList'), 'p')) {
+      const hasPage = descendants(p, 'autoNum').some((a) => attr(a, 'numType') === 'PAGE');
+      if (hasPage) {
+        const info = this.paras.get(attr(p, 'paraPrIDRef') ?? '');
+        const align = info?.style.align === 'right' ? 'right' : 'center';
+        const text = descendants(p, 't').map((t) => t.textContent ?? '').join('');
+        this.pageNumber ??= { pos: `${kind === 'header' ? 'top' : 'bottom'}-${align}`, dash: text.includes('-') };
+        continue;
+      }
+      const blocks: Block[] = [];
+      this.readParagraph(p, blocks, true, 170);
+      paras.push(...blocks.filter((b): b is Paragraph => b.type === 'paragraph'));
+    }
+    if (paras.some((p) => p.inlines.some((i) => i.kind === 'text' && i.text.trim()))) this[kind] = paras;
+  }
+
   readParagraph(p: El, out: Block[], inCell: boolean, widthMm: number) {
     const info = this.paras.get(attr(p, 'paraPrIDRef') ?? '') ?? { style: defaultParaStyle(), keepNext: false };
     let inlines: Inline[] = [];
     let hadTable = false;
+    let pageBreak = attr(p, 'pageBreak') === '1';
     const flush = (force: boolean) => {
       if (!inlines.length && !force) return;
       const para: Paragraph = { type: 'paragraph', role: 'body', style: { ...info.style }, inlines };
-      out.push(cleanParagraph(para, info.keepNext, this.styleRoles.get(attr(p, 'styleIDRef') ?? '')));
+      const clean = cleanParagraph(para, info.keepNext, this.styleRoles.get(attr(p, 'styleIDRef') ?? ''));
+      if (pageBreak) {
+        clean.pageBreak = true;
+        pageBreak = false;
+      }
+      out.push(clean);
       inlines = [];
     };
     for (const run of kids(p, 'run')) {
@@ -173,7 +203,20 @@ class Reader {
             for (const row of table.rows) for (const cell of row) out.push(...cell.blocks);
           } else out.push(table);
         } else if (name === 'ctrl') {
-          for (const cc of kids(c)) if (UNSUPPORTED[cc.localName]) this.warnings.add(UNSUPPORTED[cc.localName]);
+          for (const cc of kids(c)) {
+            const n = cc.localName;
+            if (n === 'header' || n === 'footer') this.readHeaderFooter(cc, n);
+            else if (n === 'pageNum') {
+              const pos = (attr(cc, 'pos') ?? 'BOTTOM_CENTER').toUpperCase();
+              if (pos !== 'NONE') {
+                const top = pos.startsWith('TOP');
+                const side = pos.endsWith('RIGHT') || pos.endsWith('OUTSIDE') ? 'right' : 'center';
+                this.pageNumber = { pos: `${top ? 'top' : 'bottom'}-${side}`, dash: (attr(cc, 'sideChar') ?? '') === '-' };
+              }
+            } else if (n === 'autoNum' && inCell) {
+              /* 머리말 안의 쪽 번호 — readHeaderFooter 가 처리 */
+            } else if (UNSUPPORTED[n]) this.warnings.add(UNSUPPORTED[n]);
+          }
         } else if (UNSUPPORTED[name]) this.warnings.add(UNSUPPORTED[name]);
       }
     }
@@ -301,5 +344,9 @@ export async function readHwpx(bytes: Uint8Array | ArrayBuffer, title = '문서'
   const hpf = zip.file('Contents/content.hpf');
   const savedTitle = hpf ? (await hpf.async('string')).match(/<opf:title>([^<]+)<\/opf:title>/)?.[1]?.trim() : undefined;
   const unescape = (t: string) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-  return { doc: { title: savedTitle ? unescape(savedTitle) : title, page, blocks }, warnings: [...r.warnings] };
+  const doc: Doc = { title: savedTitle ? unescape(savedTitle) : title, page, blocks };
+  if (r.header) doc.header = r.header;
+  if (r.footer) doc.footer = r.footer;
+  if (r.pageNumber) doc.pageNumber = r.pageNumber;
+  return { doc, warnings: [...r.warnings] };
 }

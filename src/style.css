@@ -304,3 +304,17 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .btn.narrow { padding: 0 8px; }
 .update-bar.recover { background: #FFF4D6; color: #5A4300; border-bottom-color: #F0D58A; }
 .btn[hidden] { display: none; }
+
+/* ── 쪽 나누기 · 머리말/꼬리말 미리 보기 ── */
+.page { position: relative; }
+.page-hf { position: absolute; display: flex; justify-content: space-between; gap: 8px; color: #555; font: 10pt var(--font-doc); pointer-events: none; }
+.page-hf[hidden] { display: none; }
+.page-hf.top { border-bottom: 1px dashed #d7dde5; padding-bottom: 2px; }
+.page-hf.bottom { border-top: 1px dashed #d7dde5; padding-top: 2px; }
+.page-hf span { flex: 1 1 0; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.page-hf .c { text-align: center; }
+.page-hf .r { text-align: right; }
+.ProseMirror .hw-page-break { position: relative; margin-top: 14mm !important; }
+.ProseMirror .hw-page-break::before { content: ''; position: absolute; left: -6mm; right: -6mm; top: -7mm; border-top: 1px dashed #8fa3bf; }
+.ProseMirror .hw-page-break::after { content: '쪽 나누기'; position: absolute; left: 50%; top: -7mm; transform: translate(-50%, -50%); padding: 0 8px;
+  background: var(--paper); color: #6f86a8; font: 11px/1.4 var(--font-ui); text-indent: 0; letter-spacing: 0; }

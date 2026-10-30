@@ -13,7 +13,7 @@ import { cleanParagraph } from '../model/normalize';
 import { resolveRun } from '../model/resolve';
 import { normalizeWidths } from '../model/table';
 import { DOCX_AUTO_LINE_FACTOR, LINE_CALIBRATION } from '../model/units';
-import { attr, kid, kids, num, parseXml, path, type El } from './xml';
+import { attr, descendants, kid, kids, num, parseXml, path, type El } from './xml';
 import type { ImportResult } from './hwpx';
 
 const twipToMm = (v: number) => (v * 25.4) / 1440;
@@ -210,6 +210,8 @@ class Reader {
   warnings = new Set<string>();
   /** "같은 스타일 문단 사이 간격 무시"(contextualSpacing) 처리를 위한 직전 문단 */
   private prev?: { para: Paragraph; styleId?: string; contextual: boolean };
+  /** 앞 문단에 쪽 나누기(br type=page)가 있었으면 다음 문단을 새 쪽에서 */
+  private pendingBreak = false;
 
   readStyles(doc?: Document) {
     if (!doc) return;
@@ -297,9 +299,17 @@ class Reader {
       }
     } else style.lineSpacingPct = DOCX_AUTO_LINE_FACTOR * 100;
 
-    // 문단 안의 쪽 나누기
-    if (descendantsHas(p, 'br', (b) => attr(b, 'type') === 'page') || kid(pPr, 'pageBreakBefore')) this.warnings.add('쪽 나누기');
+    // 쪽 나누기: 문단 속성 pageBreakBefore, 또는 앞 문단의 쪽 나누기 문자(Ctrl+Enter)
+    const breakBefore = this.pendingBreak || onOff(kid(pPr, 'pageBreakBefore')) === true;
+    this.pendingBreak = false;
+    const hasBreakChar = descendantsHas(p, 'br', (b) => attr(b, 'type') === 'page');
+    if (hasBreakChar) {
+      this.pendingBreak = true;
+      // 쪽 나누기 문자만 있는 문단은 따로 남기지 않는다 (다음 문단이 새 쪽에서 시작)
+      if (!inlines.some((i) => i.kind === 'text' && i.text.trim())) return;
+    }
     const cleaned = cleanParagraph(para, !!pp.keepNext, st.role);
+    if (breakBefore) cleaned.pageBreak = true;
     // Word: 같은 스타일 문단이 이어지면 contextualSpacing 쪽의 위/아래 간격을 없앤다
     const prev = this.prev;
     if (prev && prev.styleId === styleId) {
@@ -450,12 +460,6 @@ export async function readDocx(bytes: Uint8Array | ArrayBuffer, title = '문서'
   const r = new Reader();
   r.readStyles(await optional('word/styles.xml'));
   r.numbering = new Numbering(await optional('word/numbering.xml'));
-  if (zip.file(/^word\/header\d*\.xml$/).length || zip.file(/^word\/footer\d*\.xml$/).length) {
-    const hasText = await Promise.all(
-      [...zip.file(/^word\/header\d*\.xml$/), ...zip.file(/^word\/footer\d*\.xml$/)].map(async (f) => /<w:t[ >]/.test(await f.async('string'))),
-    );
-    if (hasText.some(Boolean)) r.warnings.add('머리말·꼬리말');
-  }
 
   const doc = parseXml(await main.async('string'));
   const body = kid(doc.documentElement, 'body');
@@ -463,6 +467,38 @@ export async function readDocx(bytes: Uint8Array | ArrayBuffer, title = '문서'
   const page = r.readPage(body);
   const blocks: Block[] = [];
   r.readBody(body, blocks, false, contentWidthMm(page));
+
+  // 머리말·꼬리말 (기본 = 모든 쪽): 쪽 번호 필드(PAGE)가 든 문단은 쪽 번호로
+  const extra: Pick<Doc, 'header' | 'footer' | 'pageNumber'> = {};
+  const relsXml = await optional('word/_rels/document.xml.rels');
+  const rels = new Map<string, string>();
+  for (const rel of kids(relsXml?.documentElement, 'Relationship')) rels.set(attr(rel, 'Id') ?? '', attr(rel, 'Target') ?? '');
+  const sect = kids(body, 'sectPr').pop();
+  for (const kind of ['header', 'footer'] as const) {
+    const refs = kids(sect, `${kind}Reference`);
+    const ref = refs.find((x) => (attr(x, 'type') ?? 'default') === 'default') ?? refs[0];
+    const target = ref ? rels.get(attr(ref, 'id') ?? '') : undefined;
+    if (!target) continue;
+    const part = await optional(`word/${target.replace(/^\/?word\//, '')}`);
+    if (!part) continue;
+    const paras: Paragraph[] = [];
+    for (const p of descendants(part.documentElement, 'p')) {
+      const isPage =
+        descendants(p, 'fldSimple').some((f) => /\bPAGE\b/.test(attr(f, 'instr') ?? '')) ||
+        descendants(p, 'instrText').some((t) => /^\s*PAGE\b/.test(t.textContent ?? ''));
+      if (isPage) {
+        const jc = attr(path(p, 'pPr', 'jc'), 'val');
+        const side = jc === 'right' || jc === 'end' ? 'right' : 'center';
+        const text = descendants(p, 't').map((t) => t.textContent ?? '').join('');
+        extra.pageNumber ??= { pos: `${kind === 'header' ? 'top' : 'bottom'}-${side}`, dash: text.includes('-') };
+        continue;
+      }
+      const out: Block[] = [];
+      r.readParagraph(p, out);
+      paras.push(...out.filter((b): b is Paragraph => b.type === 'paragraph'));
+    }
+    if (paras.some((p) => p.inlines.some((i) => i.kind === 'text' && i.text.trim()))) extra[kind] = paras;
+  }
   if (kids(body, 'sectPr').length === 0 && descendantsHas(body, 'sectPr', () => true)) r.warnings.add('여러 구역(첫 구역의 쪽 설정으로 통일)');
   if (!blocks.length || blocks[blocks.length - 1].type === 'table') {
     blocks.push(cleanParagraph({ type: 'paragraph', role: 'body', style: defaultParaStyle(), inlines: [] }));
@@ -470,5 +506,5 @@ export async function readDocx(bytes: Uint8Array | ArrayBuffer, title = '문서'
   const core = zip.file('docProps/core.xml');
   const savedTitle = core ? (await core.async('string')).match(/<dc:title>([^<]+)<\/dc:title>/)?.[1]?.trim() : undefined;
   const unescape = (t: string) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-  return { doc: { title: savedTitle ? unescape(savedTitle) : title, page, blocks } as Doc, warnings: [...r.warnings] };
+  return { doc: { title: savedTitle ? unescape(savedTitle) : title, page, blocks, ...extra } as Doc, warnings: [...r.warnings] };
 }

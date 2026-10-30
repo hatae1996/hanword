@@ -15,6 +15,9 @@ export interface Snapshot {
   path?: string;
   fileName?: string;
   format?: string;
+  header?: any;
+  footer?: any;
+  pageNumber?: any;
   savedAt: string;
 }
 

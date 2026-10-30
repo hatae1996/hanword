@@ -109,7 +109,7 @@ export const SlashMenu = Extension.create<SlashOptions>({
             const $from = sel.$from;
             if (!$from.parent.isTextblock) return close();
             const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '￼');
-            const m = before.match(/^\s*\/([^\s/]{0,20})$/);
+            const m = before.match(/^\s*\/([^/]{0,24})$/);
             if (!m) {
               dismissedAt = -1;
               return close();

@@ -19,6 +19,7 @@ function paragraph(p: Paragraph): PMNode {
   if (differs(s.spaceBeforePt, d.spaceBeforePt, 0.05)) attrs.spaceBefore = Math.round(s.spaceBeforePt * 10) / 10;
   if (differs(s.spaceAfterPt, d.spaceAfterPt, 0.05)) attrs.spaceAfter = Math.round(s.spaceAfterPt * 10) / 10;
   if (differs(s.lineSpacingPct, d.lineSpacingPct, 0.5)) attrs.lineHeight = Math.round(s.lineSpacingPct);
+  if (p.pageBreak) attrs.pageBreak = true;
 
   const content: PMNode[] = [];
   for (const i of p.inlines) {

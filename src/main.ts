@@ -1,7 +1,7 @@
 import './style.css';
 import { Editor } from '@tiptap/core';
 import { ALL_FONTS, DEFAULT_FONT, DEFAULT_PAGE, DEFAULT_SIZE_PT, HANCOM_ONLY_FONTS } from './model/defaults';
-import type { PageSetup } from './model/types';
+import type { PageNumber, PageSetup, Paragraph } from './model/types';
 import { tiptapToDoc } from './model/fromTiptap';
 import { docToTiptap } from './model/toTiptap';
 import { docToDocx } from './export/docx';
@@ -34,6 +34,8 @@ import { appVersion, checkForUpdates } from './updater';
 import { clearRecovery, loadRecovery, setupAutosave } from './autosave';
 import { addRecent, recentFiles, removeRecent, whenText } from './recent';
 import { setupNavPane } from './ui/navpane';
+import { headerFooterDialog, pageNumberDialog, pageSetupDialog, paraShapeDialog } from './ui/pageDialogs';
+import { PageBreak } from './editor/pageBreak';
 import { listDialog } from './ui/dialog';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -51,6 +53,7 @@ const editor = new Editor({
     Blanks.configure({ onCount: (n) => queueMicrotask(() => showBlanks(n)) }),
     FindReplace,
     Gaejo,
+    PageBreak,
     TableKeys.configure({ calc: (o) => calc(o) }),
     SlashMenu.configure({ items: () => [...reportParts(), ...snippetItems()] }),
     MarkdownPaste.configure({
@@ -118,6 +121,10 @@ const commands: Record<string, () => void> = {
   sum: () => calc({ op: 'sum' }),
   avg: () => calc({ op: 'avg' }),
   'format-copy': () => void formatCopy(editor, toast),
+  'page-number': () => void editPageNumber(),
+  'header-footer': () => void editHeaderFooter(),
+  'page-setup': () => void editPageSetup(),
+  'para-shape': () => void paraShapeDialog(editor),
 };
 document.querySelectorAll<HTMLButtonElement>('[data-cmd]').forEach((b) => {
   b.type = 'button';
@@ -219,6 +226,9 @@ interface FileState {
   format?: Format;
   dirty: boolean;
   page: PageSetup;
+  header?: Paragraph[];
+  footer?: Paragraph[];
+  pageNumber?: PageNumber;
   /** 열 때 지원하지 않아 빠진 요소 — 원본에 덮어쓰기 전에 경고 */
   dropped: string[];
 }
@@ -250,6 +260,61 @@ function applyPage(p: PageSetup) {
   const f = (n: number) => String(Math.round(n * 10) / 10);
   const paper = Math.round(p.widthMm) === 210 && Math.round(p.heightMm) === 297 ? 'A4' : Math.round(p.widthMm) === 297 && Math.round(p.heightMm) === 210 ? 'A4 가로' : '용지';
   r.textContent = `${paper} · ${f(p.widthMm)} × ${f(p.heightMm)} mm · 여백 위 ${f(p.marginTopMm)}(+머리말 ${f(p.headerMm)}) · 좌 ${f(p.marginLeftMm)} · 우 ${f(p.marginRightMm)} · 아래 ${f(p.marginBottomMm)}(+꼬리말 ${f(p.footerMm)})`;
+  renderHeaderFooter();
+}
+
+/** 종이 위·아래에 머리말·꼬리말·쪽 번호 미리 보기 (실제 쪽 나눔은 한글·Word 가 한다) */
+function renderHeaderFooter() {
+  const p = state.page;
+  const top = $('page-top');
+  const bottom = $('page-bottom');
+  for (const [el, mm] of [[top, p.marginTopMm], [bottom, p.marginBottomMm]] as const) {
+    el.style.left = `${p.marginLeftMm}mm`;
+    el.style.right = `${p.marginRightMm}mm`;
+    if (el === top) el.style.top = `${mm}mm`;
+    else el.style.bottom = `${mm}mm`;
+    el.querySelectorAll('span').forEach((s) => (s.textContent = ''));
+  }
+  const put = (el: HTMLElement, ps: Paragraph[] | undefined) => {
+    if (!ps?.length) return;
+    const text = ps.map((x) => x.inlines.map((i) => (i.kind === 'text' ? i.text : ' ')).join('')).join(' ');
+    const al = ps[0].style.align;
+    el.querySelector(al === 'center' ? '.c' : al === 'right' ? '.r' : '.l')!.textContent = text;
+  };
+  put(top, state.header);
+  put(bottom, state.footer);
+  const pn = state.pageNumber;
+  if (pn) {
+    const el = pn.pos.startsWith('top') ? top : bottom;
+    const slot = el.querySelector<HTMLElement>(pn.pos.endsWith('right') ? '.r' : '.c')!;
+    slot.textContent = `${slot.textContent ? `${slot.textContent}  ` : ''}${pn.dash ? '- 1 -' : '1'}`;
+  }
+  top.hidden = !state.header?.length && !pn?.pos.startsWith('top');
+  bottom.hidden = !state.footer?.length && !pn?.pos.startsWith('bottom');
+}
+
+async function editPageNumber() {
+  const r = await pageNumberDialog(state.pageNumber);
+  if (!r) return;
+  state.pageNumber = r.value;
+  renderHeaderFooter();
+  markDirty(true);
+  toast(r.value ? `쪽 번호: ${r.value.pos.startsWith('top') ? '위' : '아래'} ${r.value.pos.endsWith('right') ? '오른쪽' : '가운데'} ${r.value.dash ? '"- 1 -"' : '"1"'}` : '쪽 번호를 없앴습니다');
+}
+async function editHeaderFooter() {
+  const r = await headerFooterDialog(state.header, state.footer);
+  if (!r) return;
+  state.header = r.header;
+  state.footer = r.footer;
+  renderHeaderFooter();
+  markDirty(true);
+}
+async function editPageSetup() {
+  const p = await pageSetupDialog(state.page);
+  if (!p) return;
+  state.page = p;
+  applyPage(p);
+  markDirty(true);
 }
 // ── 화면 확대/축소 (Ctrl+휠) ─────────────────────────────
 let zoomCtl: ReturnType<typeof setupZoom> | undefined;
@@ -270,7 +335,11 @@ updateTitle();
 
 // ── 저장 ────────────────────────────────────────────────
 function currentDoc() {
-  return tiptapToDoc(editor.getJSON(), titleInput.value.trim() || '문서', state.page);
+  const doc = tiptapToDoc(editor.getJSON(), titleInput.value.trim() || '문서', state.page);
+  if (state.header?.length) doc.header = state.header;
+  if (state.footer?.length) doc.footer = state.footer;
+  if (state.pageNumber) doc.pageNumber = state.pageNumber;
+  return doc;
 }
 async function encode(format: Format) {
   const doc = currentDoc();
@@ -368,6 +437,9 @@ async function loadFile(file: OpenedFile) {
     fileName: file.name,
     format: imported ? undefined : (ext as Format),
     page: doc.page,
+    header: doc.header,
+    footer: doc.footer,
+    pageNumber: doc.pageNumber,
     dropped: imported ? [] : warnings,
   });
   titleInput.value = doc.title || title;
@@ -396,7 +468,7 @@ async function newDoc() {
   loading = true;
   editor.commands.setContent('<p></p>');
   loading = false;
-  Object.assign(state, { path: undefined, fileName: undefined, format: undefined, page: { ...DEFAULT_PAGE }, dropped: [] });
+  Object.assign(state, { path: undefined, fileName: undefined, format: undefined, page: { ...DEFAULT_PAGE }, header: undefined, footer: undefined, pageNumber: undefined, dropped: [] });
   titleInput.value = '새 문서';
   applyPage(state.page);
   markDirty(false);
@@ -458,11 +530,60 @@ window.addEventListener('keydown', (e) => {
   } else if (k === 'o') {
     e.preventDefault();
     void openDialog();
-  } else if (k === 'n') {
-    e.preventDefault();
-    void newDoc();
   }
 });
+
+// 한글 단축키 (먼저 가로챔 — 편집기에 글자가 들어가지 않도록)
+//  Ctrl+N 다음 P 쪽 번호 · H 머리말/꼬리말 · T 표 · N(또는 잠시 기다리면) 새 문서
+//  F7 편집 용지 · Alt+T 문단 모양 · Alt+N 새 문서
+let chord = 0;
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (document.querySelector('dialog[open]')) return;
+    if (chord) {
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+      clearTimeout(chord);
+      chord = 0;
+      e.preventDefault();
+      e.stopPropagation();
+      const run = chordKeys[e.code] ?? (e.key === 'Enter' ? chordKeys.KeyN : undefined);
+      if (run) run();
+      else toast('');
+      return;
+    }
+    const plain = !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey;
+    const altOnly = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === 'KeyN') {
+      e.preventDefault();
+      e.stopPropagation();
+      chord = window.setTimeout(() => {
+        chord = 0;
+        toast('');
+        void newDoc();
+      }, 1200);
+      toast('Ctrl+N — 이어서 P 쪽 번호 · H 머리말/꼬리말 · T 표 · N 새 문서');
+    } else if (plain && e.key === 'F7') {
+      e.preventDefault();
+      void editPageSetup();
+    } else if (altOnly && e.code === 'KeyT') {
+      e.preventDefault();
+      e.stopPropagation();
+      void paraShapeDialog(editor);
+    } else if (altOnly && e.code === 'KeyN') {
+      e.preventDefault();
+      e.stopPropagation();
+      void newDoc();
+    }
+  },
+  true,
+);
+const chordKeys: Record<string, () => void> = {
+  KeyP: () => void editPageNumber(),
+  KeyH: () => void editHeaderFooter(),
+  KeyT: () => commands.table(),
+  KeyN: () => void newDoc(),
+};
 
 // ── 빈칸(○○) ────────────────────────────────────────────
 function showBlanks(n: number) {
@@ -579,6 +700,9 @@ autosave = setupAutosave({
     path: state.path,
     fileName: state.fileName,
     format: state.format,
+    header: state.header,
+    footer: state.footer,
+    pageNumber: state.pageNumber,
     savedAt: new Date().toISOString(),
   }),
 });
@@ -592,7 +716,10 @@ void loadRecovery().then((snap) => {
     loading = true;
     editor.commands.setContent(snap.json as any);
     loading = false;
-    Object.assign(state, { path: snap.path, fileName: snap.fileName, format: snap.format, page: snap.page ?? { ...DEFAULT_PAGE }, dropped: [] });
+    Object.assign(state, {
+      path: snap.path, fileName: snap.fileName, format: snap.format, page: snap.page ?? { ...DEFAULT_PAGE },
+      header: snap.header, footer: snap.footer, pageNumber: snap.pageNumber, dropped: [],
+    });
     titleInput.value = snap.title;
     applyPage(state.page);
     markDirty(true);
@@ -621,4 +748,4 @@ $('app-version').addEventListener('click', () => checkForUpdates(updaterUi, true
 setTimeout(() => void checkForUpdates(updaterUi), 3000);
 
 // 디버그/테스트용
-Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable, autosave, navPane, markDirty, recent: { addRecent, recentFiles, removeRecent } } });
+Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable, currentDoc, autosave, navPane, markDirty, recent: { addRecent, recentFiles, removeRecent } } });

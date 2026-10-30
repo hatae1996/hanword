@@ -74,6 +74,12 @@
           <button class="tb wide" data-cmd="ordered" title="번호 목록" aria-label="번호 목록">1. 목록</button>
         </div>
         <div class="group">
+          <button class="tb wide" data-cmd="page-number" title="쪽 번호 매기기 (Ctrl+N, P)">쪽 번호</button>
+          <button class="tb wide" data-cmd="header-footer" title="머리말/꼬리말 (Ctrl+N, H)">머리말</button>
+          <button class="tb wide" data-cmd="page-setup" title="편집 용지 (F7)">편집 용지</button>
+          <button class="tb wide" data-cmd="para-shape" title="문단 모양 (Alt+T)">문단 모양</button>
+        </div>
+        <div class="group">
           <button class="tb wide" data-cmd="parts" title="보고서 부품 넣기 — 줄 맨 앞에서 / 를 쳐도 됩니다 (상용구: 선택 후 Alt+I 등록, 준말 + Alt+I, 목록 Ctrl+F3)">/ 부품</button>
           <button class="tb wide" data-cmd="table" title="3×3 표 넣기">표 넣기</button>
           <div class="table-tools" id="table-tools" hidden>
@@ -127,7 +133,11 @@
           <button type="button" id="find-close" title="닫기 (Esc)" aria-label="닫기">✕</button>
         </div>
         <div class="ruler" id="ruler" aria-hidden="true"></div>
-        <article class="page" id="page"><div id="editor"></div></article>
+        <article class="page" id="page">
+          <div class="page-hf top" id="page-top" aria-hidden="true"><span class="l"></span><span class="c"></span><span class="r"></span></div>
+          <div id="editor"></div>
+          <div class="page-hf bottom" id="page-bottom" aria-hidden="true"><span class="l"></span><span class="c"></span><span class="r"></span></div>
+        </article>
       </main>
       </div>
 

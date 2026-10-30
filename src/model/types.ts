@@ -54,6 +54,8 @@ export interface Paragraph {
   role: ParaRole;
   style: ParaStyle;
   inlines: Inline[];
+  /** 쪽 나누기: 이 문단은 새 쪽에서 시작 — 한글 hp:p pageBreak="1" ↔ Word w:pageBreakBefore */
+  pageBreak?: boolean;
 }
 
 /** 칸 테두리 선 — 한글 SOLID / DOUBLE_SLIM / NONE ↔ Word single / double / nil */
@@ -110,8 +112,20 @@ export interface PageSetup {
   footerMm: number;
 }
 
+/** 쪽 번호 — 한글 "쪽 번호 매기기"(hp:pageNum) ↔ Word 머리글/바닥글의 PAGE 필드 */
+export type PageNumberPos = 'bottom-center' | 'bottom-right' | 'top-center' | 'top-right';
+export interface PageNumber {
+  pos: PageNumberPos;
+  /** 줄표: "- 1 -" */
+  dash: boolean;
+}
+
 export interface Doc {
   title: string;
   page: PageSetup;
   blocks: Block[];
+  /** 머리말 / 꼬리말 (모든 쪽 같음) — 한글 hp:header/footer ↔ Word header/footer */
+  header?: Paragraph[];
+  footer?: Paragraph[];
+  pageNumber?: PageNumber;
 }

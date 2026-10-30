@@ -82,13 +82,15 @@ export function canonical(doc: Doc): string {
   const r1 = (v: number) => Math.round(v * 10) / 10;
   const para = (p: Paragraph) => ({
     role: p.role,
-    style: { ...p.style, indentLeftMm: r1(p.style.indentLeftMm), firstLineMm: r1(p.style.firstLineMm) },
+    style: { align: p.style.align, indentLeftMm: r1(p.style.indentLeftMm), firstLineMm: r1(p.style.firstLineMm), lineSpacingPct: p.style.lineSpacingPct, spaceBeforePt: p.style.spaceBeforePt, spaceAfterPt: p.style.spaceAfterPt },
     // 줄바꿈 없는 공백(U+00A0)은 화면에서 일반 공백과 같다
     inlines: mergeInlines(p.inlines.map((i) => (i.kind === 'text' ? cleanRun(p, { ...i, text: i.text.replace(/\u00A0/g, ' ') }) : i))),
+    ...(p.pageBreak ? { pageBreak: true } : {}),
   });
   const cell = (c: TableCell) => ({ colspan: c.colspan, rowspan: c.rowspan, bg: c.bg?.toUpperCase() ?? null, borders: cleanBorders(c.borders) ?? null, blocks: c.blocks.map(para) });
   const block = (b: Block) =>
     b.type === 'paragraph' ? para(b) : { table: true, colWidthsMm: b.colWidthsMm.map(r1), rows: resolveEdges(b).rows.map((r) => r.map(cell)) };
   const page = Object.fromEntries(Object.entries(doc.page).map(([k, v]) => [k, r1(v)]));
-  return JSON.stringify({ page, blocks: doc.blocks.map(block) }, null, 1);
+  const hf = (ps?: Paragraph[]) => (ps?.length ? ps.map(para) : null);
+  return JSON.stringify({ page, header: hf(doc.header), footer: hf(doc.footer), pageNumber: doc.pageNumber ?? null, blocks: doc.blocks.map(block) }, null, 1);
 }
