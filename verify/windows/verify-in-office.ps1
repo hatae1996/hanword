@@ -54,75 +54,137 @@ function Step([string]$msg) {
 $pdfDir = Join-Path $Dir "office-pdf"
 New-Item -ItemType Directory -Force $pdfDir | Out-Null
 
-function Squash([string]$s) { return ($s -replace '\s', '') }
+# 글자 비교: 공백·줄바꿈·제어 문자(Word 표 칸 끝 표시 등)는 빼고 비교
+function Squash([string]$s) { return ($s -replace '[\s\x00-\x1F​﻿]', '') }
 function Expected([string]$stem) {
   $p = Join-Path $Dir "$stem.expected.txt"
   if (Test-Path $p) { return Squash ([IO.File]::ReadAllText($p, [Text.Encoding]::UTF8)) } else { return $null }
 }
+$diffs = @()
+# 글자가 다르면 어디서부터 다른지 남긴다 (검증결과.txt 에 들어감)
+function CheckText([string]$stem, [string]$prog, [string]$raw, [string]$ext) {
+  [IO.File]::WriteAllText((Join-Path $pdfDir "$stem.$ext.txt"), $raw, (New-Object Text.UTF8Encoding $true))
+  $exp = Expected $stem
+  if (-not $exp) { return "-" }
+  $act = Squash $raw
+  if ($act -eq $exp) { return "일치" }
+  $n = [Math]::Min($exp.Length, $act.Length); $k = 0
+  while ($k -lt $n -and $exp[$k] -eq $act[$k]) { $k++ }
+  $st = [Math]::Max(0, $k - 12)
+  $e = if ($st -lt $exp.Length) { $exp.Substring($st, [Math]::Min(45, $exp.Length - $st)) } else { "" }
+  $a = if ($st -lt $act.Length) { $act.Substring($st, [Math]::Min(45, $act.Length - $st)) } else { "" }
+  $script:diffs += "글자 다름: $stem ($prog)  기대 $($exp.Length)자 / 실제 $($act.Length)자, $($k+1)번째 글자부터`r`n    기대: $e`r`n    실제: $a"
+  return "불일치"
+}
+
+# 감시: 한 문서에서 2분 30초 넘게 응답이 없으면(숨은 안내 창 등) 그 프로그램을 끄고 다음 문서로
+$beat = Join-Path $env:TEMP "hanword-verify-beat.txt"
+function Beat([string]$proc) { [IO.File]::WriteAllText($beat, $proc) }
+Beat ""
+$watch = Start-Job -ArgumentList $beat -ScriptBlock {
+  param($beat)
+  while ($true) {
+    Start-Sleep -Seconds 5
+    if (-not (Test-Path $beat)) { continue }
+    $name = ([IO.File]::ReadAllText($beat)).Trim()
+    if ($name -eq "done") { break }
+    if ($name -and ((Get-Date) - (Get-Item $beat).LastWriteTime).TotalSeconds -gt 150) {
+      Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force
+      [IO.File]::WriteAllText($beat, "")
+    }
+  }
+}
+function Alive([string]$name) { return [bool](Get-Process -Name $name -ErrorAction SilentlyContinue) }
 
 $rows = @()
 
 # ── 한컴오피스 한글 ─────────────────────────────────────────
+function NewHwp {
+  $h = New-Object -ComObject HWPFrame.HwpObject
+  try { [void]$h.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule") } catch {}
+  # 창을 보이게 둔다 — 보안 창("접근 허용")이 숨은 창 뒤에 떠서 멈추는 일을 막는다
+  try { $h.XHwpWindows.Item(0).Visible = $true } catch {}
+  return $h
+}
 $hwp = $null
 $hwps = @(Get-ChildItem $Dir -Filter *.hwpx)
 Step "한글 시작 (문서 $($hwps.Count)개) — 보안 창이 뜨면 '모두 허용'"
-try { $hwp = New-Object -ComObject HWPFrame.HwpObject } catch { Step "한컴오피스 한글이 설치돼 있지 않아 HWPX 검사를 건너뜁니다." }
+try { $hwp = NewHwp } catch { Step "한컴오피스 한글이 설치돼 있지 않아 HWPX 검사를 건너뜁니다." }
 if ($hwp) {
-  try { [void]$hwp.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule") } catch {}
-  # 창을 보이게 둔다 — 보안 창("접근 허용")이 숨은 창 뒤에 떠서 멈추는 일을 막는다
-  try { $hwp.XHwpWindows.Item(0).Visible = $true } catch {}
   $i = 0
   foreach ($f in $hwps) {
     $i++
     Step "한글 [$i/$($hwps.Count)] $($f.Name) 여는 중..."
     $r = [ordered]@{ 파일 = $f.Name; 프로그램 = "한글"; 열림 = $false; 글자 = "-"; 쪽수 = "-"; 비고 = "" }
     try {
+      if (-not $hwp) { $hwp = NewHwp }
+      Beat "Hwp"
       $r.열림 = [bool]$hwp.Open($f.FullName, "HWPX", "forceopen:true;versionwarning:false")
       if ($r.열림) {
-        $r.쪽수 = $hwp.PageCount
-        $exp = Expected $f.BaseName
-        if ($exp) { $r.글자 = if ((Squash ($hwp.GetTextFile("TEXT", ""))) -eq $exp) { "일치" } else { "불일치" } }
-        [void]$hwp.SaveAs((Join-Path $pdfDir "$($f.BaseName).hwp.pdf"), "PDF", "")
+        Beat "Hwp"; $r.쪽수 = $hwp.PageCount
+        Beat "Hwp"; $r.글자 = CheckText $f.BaseName "한글" ($hwp.GetTextFile("TEXT", "")) "hwp"
+        Beat "Hwp"; [void]$hwp.SaveAs((Join-Path $pdfDir "$($f.BaseName).hwp.pdf"), "PDF", "")
       }
       [void]$hwp.Clear(1)   # 저장하지 않고 닫기
-    } catch { $r.비고 = $_.Exception.Message }
+    } catch {
+      $r.비고 = $_.Exception.Message
+      if (-not (Alive "Hwp")) { $r.비고 = "응답 없음 — 한글을 다시 켜고 다음 문서로"; $hwp = $null }
+    }
+    Beat ""
     Step "    → 열림 $($r.열림) · 글자 $($r.글자) · $($r.쪽수)쪽 $($r.비고)"
     $rows += [pscustomobject]$r
   }
-  $hwp.Quit()
+  if ($hwp) { try { $hwp.Quit() } catch {} }
 }
 
 # ── Microsoft Word ──────────────────────────────────────────
+function NewWord {
+  $w = New-Object -ComObject Word.Application
+  # 창을 보이게 둔다 — Word 가 묻는 창(첫 실행 안내, 로그인 등)이 뜨면 사람이 눌러 줄 수 있게
+  $w.Visible = $true
+  $w.DisplayAlerts = 0
+  try { $w.AutomationSecurity = 3 } catch {}   # 매크로 묻지 않기
+  return $w
+}
 $word = $null
+$wordPdf = $true   # 로그인 안 된 Word 는 PDF 저장에서 멈춘다 → 한 번 멈추면 나머지는 PDF 없이 쪽 수만
 $docs = @(Get-ChildItem $Dir -Filter *.docx)
 Step "Word 시작 (문서 $($docs.Count)개)"
-try { $word = New-Object -ComObject Word.Application } catch { Step "Microsoft Word 가 설치돼 있지 않아 DOCX 검사를 건너뜁니다." }
+try { $word = NewWord } catch { Step "Microsoft Word 가 설치돼 있지 않아 DOCX 검사를 건너뜁니다." }
 if ($word) {
-  # 창을 보이게 둔다 — Word 가 묻는 창(첫 실행 안내 등)이 뜨면 사람이 눌러 줄 수 있게
-  $word.Visible = $true
-  $word.DisplayAlerts = 0
-  try { $word.AutomationSecurity = 3 } catch {}   # 매크로 묻지 않기
   $i = 0
   foreach ($f in $docs) {
     $i++
     Step "Word [$i/$($docs.Count)] $($f.Name) 여는 중..."
     $r = [ordered]@{ 파일 = $f.Name; 프로그램 = "Word"; 열림 = $false; 글자 = "-"; 쪽수 = "-"; 비고 = "" }
+    $stage = "열기"
     try {
+      if (-not $word) { $word = NewWord }
+      Beat "WINWORD"
       # Open(FileName, ConfirmConversions=false, ReadOnly=true, AddToRecentFiles=false)
       $doc = $word.Documents.Open($f.FullName, $false, $true, $false)
       $r.열림 = $true
       if ($doc.CompatibilityMode -lt 15) { $r.비고 = "호환 모드로 열림($($doc.CompatibilityMode))" }
-      $r.쪽수 = $doc.ComputeStatistics(2)   # wdStatisticPages
-      $exp = Expected $f.BaseName
-      if ($exp) { $r.글자 = if ((Squash $doc.Content.Text) -eq $exp) { "일치" } else { "불일치" } }
-      $doc.ExportAsFixedFormat((Join-Path $pdfDir "$($f.BaseName).word.pdf"), 17)  # wdExportFormatPDF
+      $stage = "쪽 수"; Beat "WINWORD"; $r.쪽수 = $doc.ComputeStatistics(2)   # wdStatisticPages
+      $stage = "글자"; Beat "WINWORD"; $r.글자 = CheckText $f.BaseName "Word" ($doc.Content.Text) "word"
+      if ($wordPdf) { $stage = "PDF"; Beat "WINWORD"; $doc.ExportAsFixedFormat((Join-Path $pdfDir "$($f.BaseName).word.pdf"), 17) }  # wdExportFormatPDF
       $doc.Close($false)
-    } catch { $r.비고 = $_.Exception.Message }
+    } catch {
+      $r.비고 = "$stage 단계: $($_.Exception.Message)"
+      if (-not (Alive "WINWORD")) {
+        $r.비고 = "$stage 단계에서 응답 없음 — Word 를 다시 켜고 다음 문서로"
+        if ($stage -eq "PDF") { $wordPdf = $false; $r.비고 += " (이후 PDF 저장은 건너뜀: Word 로그인·정품 인증 확인)" }
+        $word = $null
+      }
+    }
+    Beat ""
     Step "    → 열림 $($r.열림) · 글자 $($r.글자) · $($r.쪽수)쪽 $($r.비고)"
     $rows += [pscustomobject]$r
   }
-  $word.Quit()
+  if ($word) { try { $word.Quit() } catch {} }
 }
+Beat "done"
+Remove-Job $watch -Force -ErrorAction SilentlyContinue
 
 # ── 결과 ────────────────────────────────────────────────────
 $table = $rows | Format-Table -AutoSize | Out-String -Width 200
@@ -141,6 +203,7 @@ foreach ($g in ($rows | Group-Object { [IO.Path]::GetFileNameWithoutExtension($_
   }
 }
 foreach ($r in $rows) { if (-not $r.열림 -or $r.글자 -eq "불일치") { $bad++ } }
+if ($diffs.Count) { $report += ""; $report += $diffs }
 Write-Host ""
 Write-Host "PDF 저장 위치: $pdfDir  (같은 이름의 .word.pdf 와 .hwp.pdf 를 나란히 비교하세요)"
 $report += if ($bad) { "문제 $bad 건" } else { "모두 통과" }

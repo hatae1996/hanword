@@ -24,7 +24,10 @@ zip.file('읽어보기.txt', `HanWord 검증 꾸러미 (샘플 ${names.length}�
    - 한컴오피스 한글(그리고 있으면 Microsoft Word)이 샘플을 하나씩 열어
      열리는지 / 글자가 빠지지 않았는지 / 쪽 수를 확인하고, 각 프로그램이 그린 PDF 를 샘플\\office-pdf 에 저장합니다.
    - 한글이 "접근 허용" 창을 띄우면 "모두 허용"을 누르세요.
+   - 문서마다 진행 상황이 한 줄씩 나옵니다. 한 문서에서 2분 30초 넘게 멈추면 그 프로그램을 껐다 켜고 다음 문서로 넘어갑니다.
+   - Word 가 로그인·정품 인증이 안 돼 있으면 PDF 저장은 건너뛰고 쪽 수만 셉니다.
 3. 끝나면 같은 폴더에 "검증결과.txt" 가 생깁니다. 이 파일을 Claude 에게 보내 주세요.
+   중간에 멈췄다면 "검증진행.txt" 를 보내 주세요.
 `.replace(/\n/g, '\r\n'));
 const dist = join(root, 'dist-kit');
 mkdirSync(dist, { recursive: true });
