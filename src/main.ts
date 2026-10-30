@@ -164,7 +164,7 @@ async function openPolish(first?: string) {
   else if (p.kind === 'items') n = replaceWithItems(editor, blocks, p.items);
   else if (p.kind === 'replace') n = replaceRange(editor, blocks, p.paragraphs) ? blocks.length : 0;
   else if (p.kind === 'choices' && r.choice) {
-    r.mode.apply?.(r.choice);
+    r.mode.apply?.(r.choice, blocks, r.opts);
     n = 1;
   }
   if (p.kind === 'replace' && !n) return toast('표 칸을 넘나드는 선택은 한 번에 바꿀 수 없습니다', true);

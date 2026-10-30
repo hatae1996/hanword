@@ -349,6 +349,7 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .pl-line.after::before { content: '바뀐 글'; color: var(--accent); }
 .pl-line del { background: #fde2e1; color: #a1251b; text-decoration: line-through; border-radius: 2px; }
 .pl-line ins { background: #d9f2df; color: #0f5a2b; text-decoration: none; border-radius: 2px; }
+.pl-line del.sp, .pl-line ins.sp { text-decoration: none; font-weight: 700; padding: 0 1px; }
 .pl-item.lv1 { padding-left: 1.2em; } .pl-item.lv2 { padding-left: 2.4em; } .pl-item.lv3 { padding-left: 3.6em; }
 .pl-choices { display: grid; gap: 6px; }
 .pl-choice { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--paper-ink); cursor: pointer; font: 14px/1.5 var(--font-doc); }

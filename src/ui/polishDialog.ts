@@ -6,7 +6,7 @@ import { diffEdits } from '../ai/polish';
 import { OBJ, type Block, type Item } from '../editor/polish';
 import { el, finish, shell } from './dialog';
 
-export type Preview =
+export type Preview = (
   /** 문단마다 새 글 (null = 그대로) */
   | { kind: 'texts'; texts: (string | null)[] }
   /** 문단마다 개조식 항목들 */
@@ -16,12 +16,16 @@ export type Preview =
   /** 여러 안 중에서 고르기 (제목 추천 등) */
   | { kind: 'choices'; choices: string[]; note?: string }
   /** 알림만 (예: 고칠 곳 없음) */
-  | { kind: 'message'; text: string };
+  | { kind: 'message'; text: string }
+) & {
+  /** 상태 줄 끝에 붙일 말 (AI: 보낸 글자 수·비용) */
+  note?: string;
+};
 
 export type Opt =
   | { key: string; label: string; type: 'select'; value: string; options: { value: string; label: string }[] }
   | { key: string; label: string; type: 'check'; value: boolean }
-  | { key: string; label: string; type: 'text'; value: string; placeholder?: string };
+  | { key: string; label: string; type: 'text' | 'password'; value: string; placeholder?: string };
 
 export interface PolishMode {
   id: string;
@@ -32,12 +36,15 @@ export interface PolishMode {
   options?: Opt[];
   run: (blocks: Block[], opts: Record<string, any>, signal: AbortSignal) => Promise<Preview>;
   /** choices 를 고른 뒤 할 일 (제목 넣기 등) */
-  apply?: (choice: string) => void;
+  apply?: (choice: string, blocks: Block[], opts: Record<string, any>) => void;
+  /** 바꾸기 단추 글자 (기본 "바꾸기") */
+  okText?: string;
 }
 
 export interface PolishChoice {
   mode: PolishMode;
   preview: Preview;
+  opts: Record<string, any>;
   /** choices 일 때 고른 안 */
   choice?: string;
 }
@@ -55,7 +62,14 @@ function diffLine(a: string, b: string, side: 'before' | 'after'): HTMLElement {
     const s = side === 'before' ? e.from : e.from + shift;
     const t = side === 'before' ? e.to : e.from + shift + e.insert.length;
     if (s > at) line.append(document.createTextNode(show(src.slice(at, s))));
-    if (t > s) line.append(el(side === 'before' ? 'del' : 'ins', '', show(src.slice(s, t))));
+    if (t > s) {
+      const seg = src.slice(s, t);
+      // 빈칸만 바뀐 곳은 교정 부호로 보이게: 띄움 ∨ / 붙임 ⌒
+      const blank = !seg.trim();
+      const mark = el(side === 'before' ? 'del' : 'ins', blank ? 'sp' : '', blank ? (side === 'before' ? '⌒' : '∨') : show(seg));
+      if (blank) mark.title = side === 'before' ? '빈칸 지움 (붙여 씀)' : '빈칸 넣음 (띄어 씀)';
+      line.append(mark);
+    }
     at = t;
     shift += e.insert.length - (e.to - e.from);
   }
@@ -97,6 +111,10 @@ export function polishDialog(blocks: Block[], modes: PolishMode[], firstId?: str
     };
 
     const renderPreview = () => {
+      renderBody();
+      if (preview?.note) status.textContent = `${status.textContent}  ·  ${preview.note}`;
+    };
+    const renderBody = () => {
       view.replaceChildren();
       ok.disabled = true;
       if (!preview) return;
@@ -146,7 +164,7 @@ export function polishDialog(blocks: Block[], modes: PolishMode[], firstId?: str
         return;
       }
       // choices
-      status.textContent = p.note ?? '하나를 고르세요.';
+      status.textContent = '하나를 고르세요.';
       const list = el('div', 'pl-choices');
       p.choices.forEach((c, i) => {
         const lab = el('label', 'pl-choice');
@@ -180,6 +198,15 @@ export function polishDialog(blocks: Block[], modes: PolishMode[], firstId?: str
       } finally {
         if (ctrl === my) dlg.classList.remove('busy');
       }
+      // 방식이 값을 바꿨으면(예: 저장한 키 칸 비우기) 칸에도 반영
+      const v = optsOf(mode);
+      optRow.querySelectorAll<HTMLInputElement>('input[data-key]').forEach((i) => {
+        if (i.value !== (v[i.dataset.key!] ?? '')) i.value = v[i.dataset.key!] ?? '';
+      });
+      optRow.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((c, k) => {
+        const o = (mode.options ?? []).filter((x) => x.type === 'check')[k];
+        if (o) c.checked = !!v[o.key];
+      });
       renderPreview();
     };
 
@@ -208,15 +235,19 @@ export function polishDialog(blocks: Block[], modes: PolishMode[], firstId?: str
           lab.append(el('span', '', o.label), s);
         } else {
           const t = el('input', 'hw-dialog-input');
-          t.type = 'text';
+          t.type = o.type;
+          t.autocomplete = 'off';
+          t.dataset.key = o.key;
           t.value = v[o.key] ?? '';
           t.placeholder = o.placeholder ?? '';
           t.spellcheck = false;
           t.addEventListener('change', () => {
+            // Enter 로 이미 보낸 값이면 다시 묻지 않는다 (바꾸기를 누르려고 칸을 벗어날 때 또 묻지 않게)
+            if (v[o.key] === t.value || !t.value) return;
             v[o.key] = t.value;
             void run();
           });
-          // 지시를 쓰고 Enter → 다시 묻기 (대화상자 Enter=바꾸기 와 구분)
+          // 지시·키를 쓰고 Enter → 다시 (대화상자 Enter=바꾸기 와 구분)
           t.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -231,6 +262,7 @@ export function polishDialog(blocks: Block[], modes: PolishMode[], firstId?: str
       }
       optRow.hidden = !mode.options?.length;
       again.hidden = !mode.ai;
+      ok.textContent = mode.okText ?? '바꾸기';
     };
 
     const tabButtons = modes.map((m) => {
@@ -241,7 +273,7 @@ export function polishDialog(blocks: Block[], modes: PolishMode[], firstId?: str
       if (m.ai) b.classList.add('ai');
       b.addEventListener('click', () => {
         // 탭을 누른 뒤 Enter = 바꾸기 (지시를 쓰는 방식이면 그 칸으로)
-        void select(m).then(() => (optRow.querySelector<HTMLInputElement>('input[type="text"]') ?? (ok.disabled ? b : ok)).focus());
+        void select(m).then(() => (optRow.querySelector<HTMLInputElement>('input[type="text"],input[type="password"]') ?? (ok.disabled ? b : ok)).focus());
       });
       tabs.append(b);
       return b;
@@ -253,7 +285,7 @@ export function polishDialog(blocks: Block[], modes: PolishMode[], firstId?: str
       return run();
     };
 
-    ok.addEventListener('click', () => preview && done({ mode, preview, choice }));
+    ok.addEventListener('click', () => preview && done({ mode, preview, choice, opts: optsOf(mode) }));
     again.addEventListener('click', () => void run());
     cancel.addEventListener('click', () => done(null));
     dlg.addEventListener('cancel', (e) => {
@@ -262,7 +294,7 @@ export function polishDialog(blocks: Block[], modes: PolishMode[], firstId?: str
     });
     dlg.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement) && !(e.target instanceof HTMLInputElement && e.target.type === 'text') && !ok.disabled) {
+      if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement) && !(e.target instanceof HTMLInputElement && ['text', 'password'].includes(e.target.type)) && !ok.disabled) {
         e.preventDefault();
         ok.click();
       }

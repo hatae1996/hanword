@@ -144,7 +144,13 @@ export function replaceRange(editor: Editor, blocks: Block[], paragraphs: string
   const $b = state.doc.resolve(last.pos);
   if ($a.parent !== $b.parent) return false;
   const marks = firstMarks(first.node);
-  const nodes = paragraphs.map((t) => state.schema.nodes.paragraph.create({ ...first.node.attrs }, t ? state.schema.text(t, marks) : null));
+  // □ ○ 로 시작하는 줄은 개조식 들여쓰기 (AI 요약 등)
+  const base = { ...first.node.attrs, indentLeft: null, firstLine: null };
+  const nodes = paragraphs.map((t) => {
+    const m = t.match(/^([□■○●※\-◦▪·∙])\s/);
+    const attrs = m && LEVEL_OF[m[1]] !== undefined ? { ...base, ...indentAttrs(LEVEL_OF[m[1]]) } : paragraphs.length > 1 ? base : { ...first.node.attrs };
+    return state.schema.nodes.paragraph.create(attrs, t ? state.schema.text(t, marks) : null);
+  });
   const tr = own(state.tr).replaceWith(first.pos, last.pos + last.node.nodeSize, nodes);
   editor.view.dispatch(tr.scrollIntoView());
   return true;

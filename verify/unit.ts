@@ -1,5 +1,6 @@
 /** 작은 단위 검사 — 문장 다듬기 규칙 (npm run unit) */
 import { diffEdits, nominalize, splitSentences, toGaejoItems, toGongmun } from '../src/ai/polish';
+import { numbered, parseNumbered } from '../src/ai/claude';
 
 let bad = 0;
 let n = 0;
@@ -27,6 +28,10 @@ eq('공문체 문단 (안쪽 마침표 유지, 끝 마침표 뺌)', toGongmun('�
 eq('공문체 문단 (끝 마침표 남기기)', toGongmun('이관을 완료하였습니다.', { keepPeriod: true }), '이관을 완료하였음.');
 eq('공문체 문단 (기호 유지)', toGongmun('□ 다음 주에 배치할 예정입니다.'), '□ 다음 주에 배치할 예정임');
 eq('개조식 항목', toGaejoItems('○ 기록물 이관을 완료하였습니다. 총 120개 바구니를 옮겼습니다.'), ['기록물 이관을 완료하였음', '총 120개 바구니를 옮겼음']);
+
+eq('AI 문단 번호 붙이기', numbered(['가', '나']), '[1] 가\n[2] 나');
+eq('AI 답 읽기 (순서·이어진 줄·앞뒤 말)', parseNumbered('네, 고쳤습니다.\n[2] 둘째\n[1] 첫째\n이어짐\n\n[3] 셋째'), ['첫째 이어짐', '둘째', '셋째']);
+eq('AI 답 읽기 (첫째 뒤 이어진 줄)', parseNumbered('[1] 첫째\n이어짐\n[2] 둘째'), ['첫째 이어짐', '둘째']);
 
 for (let k = 0; k < 500; k++) {
   const rnd = (len: number) => Array.from({ length: len }, () => '가나다라 .'[(Math.random() * 6) | 0]).join('');
