@@ -12,6 +12,7 @@ import {
   LineRuleType,
   Packer,
   Paragraph as DParagraph,
+  ShadingType,
   Table as DTable,
   TableCell as DTableCell,
   TableLayoutType,
@@ -108,6 +109,7 @@ function table(t: Table): DTable {
             rowSpan: pc.rowspan > 1 ? pc.rowspan : undefined,
             width: { size: width, type: WidthType.DXA },
             verticalAlign: VerticalAlign.CENTER, // 한글 표 기본값과 동일
+            shading: pc.cell.bg ? { type: ShadingType.CLEAR, color: 'auto', fill: pc.cell.bg.replace('#', '') } : undefined,
           });
         }),
       }),

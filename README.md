@@ -88,7 +88,7 @@ powershell -ExecutionPolicy Bypass -File verify\windows\verify-in-office.ps1
 
 ## 호환성을 위해 지키는 규칙
 
-**편집기에는 양쪽에서 1:1 로 표현되는 기능만 둔다.** 현재: 글꼴, 크기, 굵게·기울임·밑줄·취소선, 글자색, 정렬, 제목 1–3, 목록, 표(가로·세로 병합, 열 너비), 문단 안 줄바꿈.
+**편집기에는 양쪽에서 1:1 로 표현되는 기능만 둔다.** 현재: 글꼴, 크기, 굵게·기울임·밑줄·취소선, 글자색, 정렬, 제목 1–3, 목록, 표(가로·세로 병합, 열 너비, 칸 배경색), 문단 안 줄바꿈.
 
 | 항목 | 한글(HWPX) | Word(DOCX) | 처리 |
 |---|---|---|---|
@@ -99,6 +99,7 @@ powershell -ExecutionPolicy Bypass -File verify\windows\verify-in-office.ps1
 | 양쪽 정렬 + Shift+Enter | 줄을 늘리지 않음 | 줄을 양끝으로 늘림 | Word 에 `doNotExpandShiftReturn` |
 | 표 | 고정 열 너비, 셀 세로 가운데 | 자동 맞춤이 기본 | Word 표를 `fixed` 레이아웃·가운데 정렬로 |
 | 글꼴 | 함초롬체 기본 | 맑은 고딕 기본 | 기본 맑은 고딕, 함초롬체는 "(한글 전용)" 표시 |
+| 칸 배경색 | borderFill 의 `hc:fillBrush/winBrush faceColor` (색마다 borderFill 하나) | `w:tcPr/w:shd w:fill` | 둘 다 기록, 열 때 둘 다 읽음 |
 | 빈 문단 높이 | 문단 글자모양 기준 | 문단 기호 서식 기준 | 둘 다 같은 글자모양 지정 |
 
 HWPX 는 XML 을 처음부터 만들지 않는다. **한글이 직접 저장한 빈 문서**(`templates/blank.hwpx`)를 열어

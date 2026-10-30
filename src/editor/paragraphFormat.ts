@@ -61,10 +61,38 @@ const lineHeightPct: Parse = (el) => {
   return /^[\d.]+$/.test(v) && n > 0 && n < 5 ? Math.round(n * 100) : null;
 };
 
+/** 칸 배경색: data-bg / style="background(-color)" / bgcolor 를 읽어 #RRGGBB 로 */
+function parseBg(el: HTMLElement): string | null {
+  const raw = el.getAttribute('data-bg') || el.style?.backgroundColor || el.style?.getPropertyValue('background') || el.getAttribute('bgcolor');
+  if (!raw) return null;
+  const v = String(raw).trim();
+  let m = v.match(/#([0-9a-f]{6})\b/i);
+  if (m) return `#${m[1].toUpperCase()}`;
+  m = v.match(/#([0-9a-f]{3})\b/i);
+  if (m) return `#${m[1].split('').map((c) => c + c).join('').toUpperCase()}`;
+  m = v.match(/rgba?\(\s*(\d+)\D+(\d+)\D+(\d+)(?:\D+([\d.]+))?/i);
+  if (m && (m[4] === undefined || Number(m[4]) > 0)) return `#${[m[1], m[2], m[3]].map((x) => Number(x).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+  return null;
+}
+
 export const ParagraphFormat = Extension.create({
   name: 'paragraphFormat',
   addGlobalAttributes() {
     return [
+      {
+        types: ['tableCell', 'tableHeader'],
+        attributes: {
+          backgroundColor: {
+            default: null as string | null,
+            parseHTML: (el: HTMLElement) => {
+              const c = parseBg(el);
+              return c && c !== '#FFFFFF' ? c : null;
+            },
+            renderHTML: (attrs: Record<string, any>) =>
+              attrs.backgroundColor ? { 'data-bg': attrs.backgroundColor, style: `background-color: ${attrs.backgroundColor}` } : {},
+          },
+        },
+      },
       {
         types: ['paragraph', 'heading'],
         attributes: {

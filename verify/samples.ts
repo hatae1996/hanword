@@ -54,7 +54,7 @@ export const SAMPLES: Record<string, N> = {
     {
       type: 'table',
       content: [
-        row(cell('구분', {}, [B]), cell('내용', {}, [B]), cell('비고', {}, [B])),
+        row(cell('구분', { backgroundColor: '#DCE6F1' }, [B]), cell('내용', { backgroundColor: '#DCE6F1' }, [B]), cell('비고', { backgroundColor: '#DCE6F1' }, [B])),
         row(cell('가'), cell('첫째 행 내용이 조금 길어서 셀 안에서 줄이 바뀌는 경우'), cell('')),
         row(cell('나'), cell('둘째 행'), cell('비고')),
       ],
@@ -63,7 +63,7 @@ export const SAMPLES: Record<string, N> = {
     {
       type: 'table',
       content: [
-        row(cell('가로 병합 제목', { colspan: 3 }, [B])),
+        row(cell('가로 병합 제목', { colspan: 3, backgroundColor: '#1F3864' }, [B, style({ color: '#FFFFFF' })])),
         row(cell('세로 병합', { rowspan: 2 }), cell('A'), cell('B')),
         row(cell('C'), cell('D')),
         row(cell('1', { colwidth: [60] }), cell('2', { colwidth: [200] }), cell('3', { colwidth: [120] })),

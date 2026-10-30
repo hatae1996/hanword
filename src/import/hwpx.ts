@@ -47,6 +47,8 @@ class Reader {
   chars = new Map<string, CharInfo>();
   paras = new Map<string, ParaInfo>();
   styleRoles = new Map<string, 'h1' | 'h2' | 'h3'>();
+  /** borderFill id → 칸 배경색 */
+  fills = new Map<string, string>();
   warnings = new Set<string>();
 
   readHeader(head: Document) {
@@ -72,6 +74,10 @@ class Reader {
       });
     }
     for (const p of kids(kid(refList, 'paraProperties'), 'paraPr')) this.paras.set(attr(p, 'id') ?? '', this.readParaPr(p));
+    for (const bf of kids(kid(refList, 'borderFills'), 'borderFill')) {
+      const face = (attr(kid(kid(bf, 'fillBrush'), 'winBrush'), 'faceColor') ?? '').toUpperCase();
+      if (/^#[0-9A-F]{6}$/.test(face) && face !== '#FFFFFF') this.fills.set(attr(bf, 'id') ?? '', face);
+    }
     for (const st of kids(kid(refList, 'styles'), 'style')) {
       const m = (attr(st, 'name') ?? '').match(/^제목 ([1-3])$/) ?? (attr(st, 'engName') ?? '').match(/^Heading ([1-3])$/i);
       if (m) this.styleRoles.set(attr(st, 'id') ?? '', `h${m[1]}` as 'h1');
@@ -194,7 +200,10 @@ class Reader {
         for (const p of kids(kid(tc, 'subList'), 'p')) this.readParagraph(p, blocks, true, widthMm);
         const paras = blocks.filter((b): b is Paragraph => b.type === 'paragraph');
         if (!paras.length) paras.push(cleanParagraph({ type: 'paragraph', role: 'body', style: defaultParaStyle(), inlines: [] }));
-        row.push({ col, cell: { colspan, rowspan, blocks: paras } });
+        const cell: TableCell = { colspan, rowspan, blocks: paras };
+        const bg = this.fills.get(attr(tc, 'borderFillIDRef') ?? '');
+        if (bg) cell.bg = bg;
+        row.push({ col, cell });
       }
       // cellAddr 순서대로 (한글은 보통 이미 정렬돼 있음)
       rows.push(row.sort((a, b) => a.col - b.col).map((r) => r.cell));

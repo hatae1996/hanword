@@ -57,6 +57,8 @@ class HeaderBuilder {
   private readonly paraBase: number;
   private readonly styleBase: number;
   readonly tableBorderFillId: number;
+  /** 칸 배경색별 테두리/채우기 id (색 없음 = tableBorderFillId) */
+  private cellFills: string[] = [];
 
   constructor(private readonly template: string) {
     this.charBase = itemCnt(template, 'charProperties');
@@ -87,6 +89,14 @@ class HeaderBuilder {
       this.paraIds.set(key, id);
     }
     return id;
+  }
+
+  cellBorderFill(bg?: string): number {
+    if (!bg) return this.tableBorderFillId;
+    const c = bg.toUpperCase();
+    let i = this.cellFills.indexOf(c);
+    if (i < 0) i = this.cellFills.push(c) - 1;
+    return this.tableBorderFillId + 1 + i;
   }
 
   /** 제목 1~3 스타일 (한글 스타일 목록에 "제목 1" 등으로 보이고, 다시 열 때 제목으로 인식) */
@@ -125,12 +135,16 @@ class HeaderBuilder {
     // 2) 표 테두리
     const w = hwpBorderWidth(TABLE_DEFAULTS.borderMm);
     const line = (side: string) => `<hh:${side} type="SOLID" width="${w}" color="#000000"/>`;
-    const borderFill =
-      `<hh:borderFill id="${this.tableBorderFillId}" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">` +
+    const fill = (id: number, bg?: string) =>
+      `<hh:borderFill id="${id}" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">` +
       `<hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/>` +
       line('leftBorder') + line('rightBorder') + line('topBorder') + line('bottomBorder') +
-      `<hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/></hh:borderFill>`;
-    xml = appendItems(xml, 'borderFills', borderFill, 1);
+      `<hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/>` +
+      // 칸 배경색: 단색 채우기 (한글 "셀 테두리/배경 → 배경 → 면 색")
+      (bg ? `<hc:fillBrush><hc:winBrush faceColor="${bg}" hatchColor="#999999" alpha="0"/></hc:fillBrush>` : '') +
+      `</hh:borderFill>`;
+    const fills = [fill(this.tableBorderFillId), ...this.cellFills.map((bg, i) => fill(this.tableBorderFillId + 1 + i, bg))];
+    xml = appendItems(xml, 'borderFills', fills.join(''), fills.length);
 
     // 3) 글자 모양
     const charXml = this.charPrs
@@ -248,7 +262,7 @@ class SectionBuilder {
             const height = rowH.slice(pc.row, pc.row + pc.rowspan).reduce((a, b) => a + b, 0);
             const paras = pc.cell.blocks.map((b) => this.paragraph(b)).join('');
             return (
-              `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">` +
+              `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${this.hb.cellBorderFill(pc.cell.bg)}">` +
               `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">${paras}</hp:subList>` +
               `<hp:cellAddr colAddr="${pc.col}" rowAddr="${pc.row}"/><hp:cellSpan colSpan="${pc.colspan}" rowSpan="${pc.rowspan}"/>` +
               `<hp:cellSz width="${width}" height="${height}"/>${margin('cellMargin')}</hp:tc>`

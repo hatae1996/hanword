@@ -55,6 +55,7 @@ function table(t: Table): PMNode {
           colspan: pc.colspan,
           rowspan: pc.rowspan,
           colwidth: t.colWidthsMm.slice(pc.col, pc.col + pc.colspan).map(mmToPx),
+          backgroundColor: pc.cell.bg ?? null,
         },
         content: pc.cell.blocks.map(paragraph),
       })),

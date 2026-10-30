@@ -383,6 +383,7 @@ function tableToMd(t: Table, contentMm: number): string {
         if (pc.rowspan > 1) attrs.push(`rowspan="${pc.rowspan}"`);
         // 열 너비: 본문 폭 대비 % (가로 병합 칸만 있는 줄도 있으므로 한 칸짜리 셀마다 적는다)
         if (pc.colspan === 1) attrs.push(`width="${Math.round((t.colWidthsMm[pc.col] / total) * 10000) / 100}%"`);
+        if (pc.cell.bg) attrs.push(`style="background:${pc.cell.bg}"`);
         const content = pc.cell.blocks.map((b) => paraToHtml(b)).join('');
         return `<td${attrs.length ? ' ' + attrs.join(' ') : ''}>${content}</td>`;
       })

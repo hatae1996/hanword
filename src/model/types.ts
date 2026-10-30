@@ -58,6 +58,8 @@ export interface TableCell {
   colspan: number;
   rowspan: number;
   blocks: Paragraph[];
+  /** 칸 배경색 #RRGGBB (없으면 색 없음) — HWPX borderFill 채우기 / DOCX w:shd */
+  bg?: string;
 }
 
 /**

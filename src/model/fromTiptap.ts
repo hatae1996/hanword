@@ -171,6 +171,8 @@ function toTable(node: PMNode, widthMm: number): Table {
       }
       if (!blocks.length) blocks.push(emptyParagraph());
       const cell: TableCell = { colspan: cellNode.attrs?.colspan ?? 1, rowspan: cellNode.attrs?.rowspan ?? 1, blocks };
+      const bg = normalizeColor(cellNode.attrs?.backgroundColor);
+      if (bg && bg !== '#FFFFFF') cell.bg = bg;
       if (Array.isArray(cellNode.attrs?.colwidth)) rawWidths.set(cell, cellNode.attrs!.colwidth);
       row.push(cell);
     }

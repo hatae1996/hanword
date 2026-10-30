@@ -359,6 +359,8 @@ class Reader {
         const paras = blocks.filter((b): b is Paragraph => b.type === 'paragraph');
         if (!paras.length) paras.push(cleanParagraph({ type: 'paragraph', role: 'body', style: defaultParaStyle(), inlines: [] }));
         const cell: TableCell = { colspan: span, rowspan: 1, blocks: paras };
+        const fill = attr(kid(tcPr, 'shd'), 'fill');
+        if (fill && /^[0-9a-f]{6}$/i.test(fill) && fill.toUpperCase() !== 'FFFFFF') cell.bg = `#${fill.toUpperCase()}`;
         if (vmVal === 'restart') vOrigin.set(col, cell);
         else vOrigin.delete(col);
         row.push(cell);

@@ -87,6 +87,47 @@ curl -fsSL -o hanword.mjs https://github.com/hatae1996/hanword/releases/latest/d
 </table>
 ```
 
+### 칸 배경색
+
+HTML 표의 칸에 `style="background:#색"` 을 쓰면 한글·Word 양쪽에 칸 색이 들어갑니다 (`<th>` 머리글 칸도 같음).
+
+```html
+<td style="background:#C5D9F1">머리글</td>
+```
+
+자주 쓰는 색: 남색 `#1F3864` (흰 글자와 함께), 연파랑 `#DCE6F1`, 머리글 파랑 `#C5D9F1`, 회색 `#E7E6E6`.
+
+### 보고서 꾸미기 (공공기관 보고서 모양)
+
+글자만 있는 보고서는 밋밋해 보입니다. 아래 세 가지를 쓰면 발주처·기관 보고서다운 모양이 됩니다.
+
+**제목 상자** — 칸 하나짜리 표에 색을 칠하고 큰 글자
+
+```html
+<table>
+  <tr><td style="background:#1F3864" align="center"><p align="center"><span style="color:#FFFFFF; font-size:18pt"><strong>○○ 사업 결과 보고</strong></span></p></td></tr>
+</table>
+```
+
+**정보 표** — 사업명·보고일·작성자를 칸으로 정리, 항목 이름 칸은 회색
+
+```html
+<table>
+  <tr><td width="15%" style="background:#E7E6E6" align="center"><strong>사 업 명</strong></td><td colspan="3">○○ 용역</td></tr>
+  <tr><td width="15%" style="background:#E7E6E6" align="center"><strong>보 고 일</strong></td><td width="35%">2026. ○○. ○○.</td><td width="15%" style="background:#E7E6E6" align="center"><strong>작 성</strong></td><td width="35%">○○팀</td></tr>
+</table>
+```
+
+**장 제목 막대** — 왼쪽 남색 칸에 로마 숫자, 오른쪽 연파랑 칸에 장 이름 (`## 1. 개요` 대신)
+
+```html
+<table>
+  <tr><td width="7%" style="background:#1F3864" align="center"><span style="color:#FFFFFF; font-size:13pt"><strong>Ⅰ</strong></span></td><td width="93%" style="background:#DCE6F1"><span style="color:#1F3864; font-size:13pt"><strong>추진 개요</strong></span></td></tr>
+</table>
+```
+
+그 밖에: 표 머리글은 `#C5D9F1`, 합계 줄은 `#E7E6E6`. 표와 표 사이에는 `<p></p>` (빈 줄) 하나. 단계·절차는 개조식보다 "단계 | 주요 내용" 표가 깔끔합니다.
+
 ### 글자 색·크기·글꼴, 정렬
 
 ```html

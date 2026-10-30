@@ -85,6 +85,7 @@ const commands: Record<string, () => void> = {
   'row-del': () => chain().deleteRow().run(),
   'col-del': () => chain().deleteColumn().run(),
   'table-del': () => chain().deleteTable().run(),
+  'cell-nocolor': () => chain().setCellAttribute('backgroundColor', null).run(),
 };
 document.querySelectorAll<HTMLButtonElement>('[data-cmd]').forEach((b) => {
   b.type = 'button';
@@ -106,6 +107,12 @@ const colorInput = $<HTMLInputElement>('font-color');
 colorInput.addEventListener('input', () => {
   chain().setColor(colorInput.value).run();
   $('color-swatch').style.borderBottomColor = colorInput.value;
+});
+
+const cellColor = $<HTMLInputElement>('cell-color');
+cellColor.addEventListener('input', () => {
+  chain().setCellAttribute('backgroundColor', cellColor.value.toUpperCase()).run();
+  $('cell-color-chip').style.background = cellColor.value;
 });
 
 // ── 현재 서식을 리본에 반영 ───────────────────────────────

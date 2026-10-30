@@ -84,7 +84,7 @@ export function canonical(doc: Doc): string {
     // 줄바꿈 없는 공백(U+00A0)은 화면에서 일반 공백과 같다
     inlines: mergeInlines(p.inlines.map((i) => (i.kind === 'text' ? cleanRun(p, { ...i, text: i.text.replace(/\u00A0/g, ' ') }) : i))),
   });
-  const cell = (c: TableCell) => ({ colspan: c.colspan, rowspan: c.rowspan, blocks: c.blocks.map(para) });
+  const cell = (c: TableCell) => ({ colspan: c.colspan, rowspan: c.rowspan, bg: c.bg?.toUpperCase() ?? null, blocks: c.blocks.map(para) });
   const block = (b: Block) =>
     b.type === 'paragraph' ? para(b) : { table: true, colWidthsMm: b.colWidthsMm.map(r1), rows: b.rows.map((r) => r.map(cell)) };
   const page = Object.fromEntries(Object.entries(doc.page).map(([k, v]) => [k, r1(v)]));
