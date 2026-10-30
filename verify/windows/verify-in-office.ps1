@@ -18,7 +18,7 @@
     HKCU\SOFTWARE\HNC\HwpAutomation\Modules 에 FilePathCheckerModule = <dll 경로> 로 등록하면 창 없이 실행된다.
     등록하지 않았으면 창이 뜰 때 "모두 허용"을 누르면 된다.
 #>
-param([string]$Dir = "")
+param([string]$Dir = "", [switch]$Word)   # Word 검사는 -Word 를 붙였을 때만 (기본: 한글만)
 
 # 검증 꾸러미(릴리스의 HanWord-검증꾸러미.zip)로 받았으면 옆의 "샘플" 폴더, 저장소에서는 verify\out
 if (-not $Dir) {
@@ -149,8 +149,10 @@ function NewWord {
 $word = $null
 $wordPdf = $true   # 로그인 안 된 Word 는 PDF 저장에서 멈춘다 → 한 번 멈추면 나머지는 PDF 없이 쪽 수만
 $docs = @(Get-ChildItem $Dir -Filter *.docx)
-Step "Word 시작 (문서 $($docs.Count)개)"
-try { $word = NewWord } catch { Step "Microsoft Word 가 설치돼 있지 않아 DOCX 검사를 건너뜁니다." }
+if ($Word) {
+  Step "Word 시작 (문서 $($docs.Count)개)"
+  try { $word = NewWord } catch { Step "Microsoft Word 가 설치돼 있지 않아 DOCX 검사를 건너뜁니다." }
+}
 if ($word) {
   $i = 0
   foreach ($f in $docs) {
