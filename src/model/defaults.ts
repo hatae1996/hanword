@@ -68,3 +68,26 @@ export const TABLE_DEFAULTS = {
 
 /** 목록(글머리표/번호)을 위한 내어쓰기 폭 */
 export const LIST_INDENT_MM = 7;
+
+/** 프린터가 못 찍는 종이 끝을 피해 머리말·꼬리말(쪽 번호)을 둘 최소 거리 */
+export const HF_EDGE_MM = 10;
+
+/**
+ * 머리말·꼬리말·쪽 번호가 종이 끝에 붙어 있으면(위/아래 여백 < 10mm) 10mm 안쪽으로 옮긴다.
+ * 머리말/꼬리말 높이에서 덜어 내므로 본문 자리(위 여백 + 머리말, 아래 여백 + 꼬리말)는 그대로다.
+ * 바꿀 게 없으면 null.
+ */
+export function keepHfOffEdge(p: PageSetup, use: { top: boolean; bottom: boolean }): PageSetup | null {
+  const MIN_HF = 5; // 10pt 한 줄이 들어갈 높이
+  let out: PageSetup | null = null;
+  const move = (edge: 'marginTopMm' | 'marginBottomMm', hf: 'headerMm' | 'footerMm') => {
+    const page = out ?? p;
+    const need = HF_EDGE_MM - page[edge];
+    const take = Math.min(need, Math.max(0, page[hf] - MIN_HF));
+    if (need <= 0 || take <= 0) return;
+    out = { ...page, [edge]: Math.round((page[edge] + take) * 100) / 100, [hf]: Math.round((page[hf] - take) * 100) / 100 };
+  };
+  if (use.top) move('marginTopMm', 'headerMm');
+  if (use.bottom) move('marginBottomMm', 'footerMm');
+  return out;
+}

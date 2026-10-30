@@ -173,7 +173,9 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .ProseMirror .selectedCell::after { content: ''; position: absolute; inset: 0; background: rgba(11, 107, 99, 0.16); pointer-events: none; }
 .ProseMirror .column-resize-handle { position: absolute; right: -2px; top: 0; bottom: -2px; width: 4px; background: #0b6b63; pointer-events: none; }
 .ProseMirror.resize-cursor { cursor: col-resize; }
-.tableWrapper { overflow-x: auto; padding: 1px 1px 2px; margin: -1px; } /* 표 테두리가 잘리지 않게 */
+/* 표 감싸개: 스크롤하지 않는다 — Windows 는 표가 1px 만 넘쳐도 표 밑에 가로 스크롤 막대가 생기므로.
+   본문보다 넓은 표는 한글처럼 종이 밖으로 보인다 */
+.tableWrapper { overflow: visible; }
 
 /* ── 업데이트 알림 줄 ── */
 .update-bar {
@@ -322,3 +324,20 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 /* ── 그림 ── */
 .ProseMirror img.hw-image { display: inline-block; vertical-align: bottom; max-width: 100%; height: auto; object-fit: contain; }
 .ProseMirror img.ProseMirror-selectednode { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ── 인쇄: 종이 내용만 (용지·여백·쪽 번호는 src/ui/print.ts 의 @page) ── */
+@media print {
+  html, body { height: auto !important; background: #fff !important; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .topbar, .ribbon, .update-bar, .navpane, .findbar, .ruler, .statusbar, .page-hf, .hw-slash, dialog { display: none !important; }
+  .app, .workspace, .desk { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; background: none !important; }
+  .page { width: auto !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; zoom: 1 !important; background: none !important; }
+  .ProseMirror { min-height: 0 !important; }
+  .ProseMirror .hw-page-break { break-before: page; margin-top: 0 !important; }
+  .ProseMirror .hw-page-break::before, .ProseMirror .hw-page-break::after { content: none !important; display: none !important; }
+  .ProseMirror .hw-blank, .ProseMirror .hw-find, .ProseMirror .hw-find-current { background: none !important; box-shadow: none !important; }
+  .ProseMirror .selectedCell::after, .ProseMirror .column-resize-handle, .ProseMirror-gapcursor { display: none !important; }
+  .ProseMirror img.ProseMirror-selectednode { outline: none !important; }
+  .ProseMirror ::selection { background: transparent; }
+  .ProseMirror tr, .ProseMirror img { break-inside: avoid; }
+}

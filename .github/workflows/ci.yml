@@ -39,6 +39,23 @@ jobs:
           npm run build:cli
           node cli/hanword.mjs verify/fixtures/02-표.hwp -o kit-test/표.md
 
+  # 데스크톱 앱(Rust) 이 Windows 에서 컴파일되는지 — 인쇄 대화상자처럼 Windows 전용 코드가 있어서
+  windows-app:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - run: npm run build
+      - run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+
   test:
     runs-on: ubuntu-latest
     steps:

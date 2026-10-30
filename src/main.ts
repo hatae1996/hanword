@@ -1,6 +1,6 @@
 import './style.css';
 import { Editor } from '@tiptap/core';
-import { ALL_FONTS, DEFAULT_FONT, DEFAULT_PAGE, DEFAULT_SIZE_PT, HANCOM_ONLY_FONTS } from './model/defaults';
+import { ALL_FONTS, DEFAULT_FONT, DEFAULT_PAGE, DEFAULT_SIZE_PT, HANCOM_ONLY_FONTS, keepHfOffEdge } from './model/defaults';
 import type { PageNumber, PageSetup, Paragraph } from './model/types';
 import { tiptapToDoc } from './model/fromTiptap';
 import { docToTiptap } from './model/toTiptap';
@@ -27,10 +27,11 @@ import { expandSnippet, openSnippetList, registerSnippet, reportParts, snippetIt
 import { generateJSON } from '@tiptap/html';
 import { safeFileName } from './save';
 import {
-  IMAGE_EXTS, askSavePath, baseName, confirmDialog, download, extOf, isDesktop, pickFile, pickImages, readPath, setWindowTitle, wireDesktop, writePath,
+  IMAGE_EXTS, askSavePath, baseName, confirmDialog, download, extOf, isDesktop, pickFile, pickImages, printDoc, readPath, setWindowTitle, wireDesktop, writePath,
   type Format, type OpenedFile,
 } from './platform';
 import { SAMPLE_HTML } from './sample';
+import { applyPrintPage } from './ui/print';
 import { appVersion, checkForUpdates } from './updater';
 import { clearRecovery, loadRecovery, setupAutosave } from './autosave';
 import { addRecent, recentFiles, removeRecent, whenText } from './recent';
@@ -349,12 +350,27 @@ function renderHeaderFooter() {
   }
   top.hidden = !state.header?.length && !pn?.pos.startsWith('top');
   bottom.hidden = !state.footer?.length && !pn?.pos.startsWith('bottom');
+  applyPrintPage({ page: p, header: state.header, footer: state.footer, pageNumber: pn });
+}
+
+/** 머리말 자리(위)·꼬리말 자리(아래)에 찍을 것이 있는가 */
+function hfUse() {
+  const pn = state.pageNumber?.pos;
+  return { top: !!state.header?.length || !!pn?.startsWith('top'), bottom: !!state.footer?.length || !!pn?.startsWith('bottom') };
+}
+/** 쪽 번호·머리말·꼬리말을 새로 넣었는데 종이 끝에 붙는 여백이면 안쪽으로 */
+function keepEdgeAfterEdit() {
+  const fixed = keepHfOffEdge(state.page, hfUse());
+  if (!fixed) return;
+  state.page = fixed;
+  applyPage(fixed);
 }
 
 async function editPageNumber() {
   const r = await pageNumberDialog(state.pageNumber);
   if (!r) return;
   state.pageNumber = r.value;
+  keepEdgeAfterEdit();
   renderHeaderFooter();
   markDirty(true);
   toast(r.value ? `쪽 번호: ${r.value.pos.startsWith('top') ? '위' : '아래'} ${r.value.pos.endsWith('right') ? '오른쪽' : '가운데'} ${r.value.dash ? '"- 1 -"' : '"1"'}` : '쪽 번호를 없앴습니다');
@@ -364,6 +380,7 @@ async function editHeaderFooter() {
   if (!r) return;
   state.header = r.header;
   state.footer = r.footer;
+  keepEdgeAfterEdit();
   renderHeaderFooter();
   markDirty(true);
 }
@@ -459,6 +476,7 @@ async function saveCurrent() {
 }
 
 $('save-doc').addEventListener('click', () => saveCurrent());
+$('print-doc').addEventListener('click', () => void printDoc());
 $('save-hwpx').addEventListener('click', () => saveAs('hwpx'));
 $('save-docx').addEventListener('click', () => saveAs('docx'));
 
@@ -502,13 +520,17 @@ async function loadFile(file: OpenedFile) {
     pageNumber: doc.pageNumber,
     dropped: imported ? [] : warnings,
   });
+  // 쪽 번호·꼬리말이 종이 끝에 붙어 있으면(인쇄하면 맨 밑에 찍히거나 잘림) 10mm 안쪽으로
+  const edgeFixed = keepHfOffEdge(doc.page, hfUse());
+  if (edgeFixed) state.page = edgeFixed;
   titleInput.value = doc.title || title;
   if (file.path && !imported) addRecent(file.path, file.name);
-  applyPage(doc.page);
-  markDirty(imported);
+  applyPage(state.page);
+  markDirty(imported || !!edgeFixed);
   refresh();
-  if (imported) toast(`${file.name} 을(를) 가져왔습니다 — ${ext === 'hwp' ? '구형 .hwp 는 그대로 두고, ' : ''}한글로 저장(.hwpx) / Word로 저장 을 누르세요${warnings.length ? ` · 빠진 요소: ${warnings.join(', ')}` : ''}`);
-  else toast(warnings.length ? `${file.name} 열림 · 아직 지원하지 않아 빠진 요소: ${warnings.join(', ')}` : `${file.name} 열림`, warnings.length > 0);
+  const edgeNote = edgeFixed ? ' · 쪽 번호·꼬리말이 종이 끝에 붙어 있어 10mm 안쪽으로 옮겼습니다(본문 자리는 그대로, 저장하면 반영)' : '';
+  if (imported) toast(`${file.name} 을(를) 가져왔습니다 — ${ext === 'hwp' ? '구형 .hwp 는 그대로 두고, ' : ''}한글로 저장(.hwpx) / Word로 저장 을 누르세요${warnings.length ? ` · 빠진 요소: ${warnings.join(', ')}` : ''}${edgeNote}`);
+  else toast(`${warnings.length ? `${file.name} 열림 · 아직 지원하지 않아 빠진 요소: ${warnings.join(', ')}` : `${file.name} 열림`}${edgeNote}`, warnings.length > 0);
 }
 
 async function openDialog() {
@@ -644,6 +666,9 @@ window.addEventListener('keydown', (e) => {
   } else if (k === 'o') {
     e.preventDefault();
     void openDialog();
+  } else if ((k === 'p' || e.code === 'KeyP') && !e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    void printDoc();
   }
 });
 

@@ -38,6 +38,41 @@ fn write_file(request: Request<'_>) -> Result<(), String> {
     })
 }
 
+/// 인쇄: Windows 기본 인쇄 대화상자 (설치된 모든 프린터·프린터 속성이 나온다).
+/// 웹 보기(WebView2)의 기본 window.print() 는 브라우저식 미리 보기라 일부 프린터가 안 보이고
+/// 날짜·주소 머리글이 붙을 수 있어서, 한글·Word 와 같은 시스템 대화상자를 연다.
+/// 오래된 WebView2 등으로 실패하면 Err → 웹 쪽에서 window.print() 로 대신한다.
+/// (async: 주 스레드가 아닌 곳에서 돌아야 with_webview 결과를 기다려도 멈추지 않는다)
+#[tauri::command(async)]
+fn print_system(webview: tauri::Webview) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let (tx, rx) = std::sync::mpsc::channel::<Result<(), String>>();
+        webview
+            .with_webview(move |pw| {
+                use webview2_com::Microsoft::Web::WebView2::Win32::{
+                    ICoreWebView2_16, COREWEBVIEW2_PRINT_DIALOG_KIND_SYSTEM,
+                };
+                use windows_core::Interface;
+                let r = unsafe {
+                    pw.controller()
+                        .CoreWebView2()
+                        .and_then(|w| w.cast::<ICoreWebView2_16>())
+                        .and_then(|w| w.ShowPrintUI(COREWEBVIEW2_PRINT_DIALOG_KIND_SYSTEM))
+                };
+                let _ = tx.send(r.map_err(|e| e.to_string()));
+            })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|e| e.to_string())?
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = webview;
+        Err("system print dialog is Windows only".into())
+    }
+}
+
 /// 탐색기의 "연결 프로그램"으로 실행될 때 넘어온 파일 경로
 #[tauri::command]
 fn launch_file() -> Option<String> {
@@ -50,7 +85,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init()) // 업데이트 후 다시 시작
         .plugin(tauri_plugin_updater::Builder::new().build()) // 자동 업데이트
-        .invoke_handler(tauri::generate_handler![read_file, write_file, launch_file])
+        .invoke_handler(tauri::generate_handler![read_file, write_file, launch_file, print_system])
         .run(tauri::generate_context!())
         .expect("HanWord 를 시작할 수 없습니다");
 }

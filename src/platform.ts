@@ -30,6 +30,23 @@ const tauri = () => Promise.all([import('@tauri-apps/api/core'), import('@tauri-
 export const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
 export const extOf = (p: string) => (p.match(/\.([^.\\/]+)$/)?.[1] ?? '').toLowerCase();
 
+/**
+ * 인쇄. 데스크톱 앱은 Windows 기본 인쇄 대화상자(설치된 프린터 모두, 프린터 속성)를 열고,
+ * 그게 안 되면(오래된 WebView2·브라우저) 브라우저 인쇄 창.
+ */
+export async function printDoc(): Promise<void> {
+  if (isDesktop) {
+    try {
+      const [{ invoke }] = await tauri();
+      await invoke('print_system');
+      return;
+    } catch {
+      /* 아래 브라우저 인쇄로 */
+    }
+  }
+  window.print();
+}
+
 export async function readPath(path: string): Promise<OpenedFile> {
   const [{ invoke }] = await tauri();
   const buf = await invoke<ArrayBuffer>('read_file', { path });
