@@ -20,6 +20,7 @@ curl -fsSL -o hanword.mjs https://github.com/hatae1996/hanword/releases/latest/d
 | 둘 다 | `node hanword.mjs 보고서.md --both` |
 | 한글/Word 문서 읽기 | `node hanword.mjs 받은문서.hwpx` → `받은문서.md` |
 | Word → 한글 변환 | `node hanword.mjs 문서.docx -o 문서.hwpx` |
+| 구형 한글(.hwp) 읽기 | `node hanword.mjs 옛문서.hwp` → `옛문서.md` (릴리스의 `rhwp.js`, `rhwp_bg.wasm` 을 hanword.mjs 옆에 두기) |
 
 변환기는 만든 파일을 다시 열어 글자가 빠지지 않았는지 스스로 확인하고 `✓ 보고서.hwpx (글자 378자 · 문단 20개 · 표 2개 확인)` 처럼 알려 줍니다.
 `⚠` 가 나오면 지원하지 않는 요소(그림 등)가 빠졌다는 뜻입니다.
