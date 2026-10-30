@@ -1,6 +1,6 @@
 [package]
 name = "hanword"
-version = "1.1.0"
+version = "1.2.0"
 description = "한글(HWPX)과 Word(DOCX) 모두 호환되는 문서 편집기"
 authors = ["HanWord"]
 license = "MIT"
