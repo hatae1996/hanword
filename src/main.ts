@@ -38,6 +38,11 @@ import { aiModes } from './ui/aiModes';
 import { applyTexts, replaceRange, replaceWithItems, selectedBlocks } from './editor/polish';
 import { addMemo, gotoNextMemo, listMemos, memoAt, updateMemo, wordRange } from './editor/memo';
 import { memoDialog } from './ui/memoDialog';
+import { setupDesignPanel } from './ui/designPanel';
+import { applyTheme } from './design/apply';
+import { accentById, themeById } from './design/themes';
+import { closeHistory } from '@tiptap/pm/history';
+import { TextSelection } from '@tiptap/pm/state';
 import { appVersion, checkForUpdates } from './updater';
 import { clearRecovery, loadRecovery, setupAutosave } from './autosave';
 import { addRecent, recentFiles, removeRecent, whenText } from './recent';
@@ -481,6 +486,39 @@ applyPage(state.page);
 updateTitle();
 
 // ── 저장 ────────────────────────────────────────────────
+// ── 디자인(문서 테마) ────────────────────────────────────
+const DESIGN_KEY = 'hanword.design';
+let design: { themeId?: string; accentId: string } = (() => {
+  try {
+    return { accentId: JSON.parse(localStorage.getItem(DESIGN_KEY) ?? '{}').accentId ?? 'navy' };
+  } catch {
+    return { accentId: 'navy' };
+  }
+})();
+/** 테마를 문서에 입힌다 — 편집 한 번으로 (Ctrl+Z 로 되돌림) */
+function applyDesign(themeId: string, accentId: string) {
+  const th = themeById(themeId);
+  const themed = applyTheme(currentDoc(), th, accentById(accentId));
+  const node = editor.schema.nodeFromJSON(docToTiptap(themed) as any);
+  const at = editor.state.selection.from;
+  const tr = closeHistory(editor.state.tr).replaceWith(0, editor.state.doc.content.size, node.content);
+  tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(at, tr.doc.content.size))));
+  editor.view.dispatch(tr);
+  state.header = themed.header;
+  state.footer = themed.footer;
+  renderHeaderFooter();
+  design = { themeId, accentId };
+  try {
+    localStorage.setItem(DESIGN_KEY, JSON.stringify({ accentId }));
+  } catch {
+    /* 기억 못 해도 됨 */
+  }
+  markDirty(true);
+  toast(`디자인: ${th.name} 테마${th.hancomFonts ? ' (휴먼명조·HY헤드라인M — Word 만 있는 PC 에서는 비슷한 글꼴로 보임)' : ''} · Ctrl+Z 로 되돌리기`);
+}
+const designPanel = setupDesignPanel($('designpane'), { apply: applyDesign, current: () => design });
+$('design').addEventListener('click', () => designPanel.toggle());
+
 function currentDoc() {
   const doc = tiptapToDoc(editor.getJSON(), titleInput.value.trim() || '문서', state.page);
   if (state.header?.length) doc.header = state.header;

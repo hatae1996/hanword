@@ -21,6 +21,8 @@ import { readHwpx } from '../src/import/hwpx';
 import { readDocx } from '../src/import/docx';
 import type { Doc } from '../src/model/types';
 import { SAMPLES, SAMPLE_EXTRAS } from './samples';
+import { applyTheme } from '../src/design/apply';
+import { ACCENTS, THEMES } from '../src/design/themes';
 import { BUILTIN_TEMPLATES } from '../src/ui/templates';
 import { readHwp } from '../src/import/hwp';
 import { loadRhwpNode } from '../src/import/hwpNode';
@@ -80,6 +82,26 @@ for (const [name, json] of Object.entries(SAMPLES)) {
   same(`${name}: 문서 → 마크다운 → 문서`, stripMemos(d0), markdownToDoc(docToMarkdown(d0), nodeGenerateJSON).doc);
   if (d0.memos?.length) {
     ok(`${name}: 메모 ${d0.memos.length}개 (HWPX·DOCX 모두)`, h.doc.memos?.length === d0.memos.length && x.doc.memos?.length === d0.memos.length, `${h.doc.memos?.length} / ${x.doc.memos?.length}`);
+  }
+}
+
+// ── 문서 테마: 저장·열기 그대로, 테마를 바꿔 입혀도 같은 결과 ──────────
+{
+  const docs: [string, Doc][] = [];
+  for (const t of BUILTIN_TEMPLATES) docs.push([`양식 ${t.name}`, markdownToDoc(t.markdown, nodeGenerateJSON).doc]);
+  docs.push(['샘플 02-표', { ...tiptapToDoc(SAMPLES['02-표'] as any, '02-표') }]);
+  docs.push(['샘플 07-메모', { ...tiptapToDoc(SAMPLES['07-메모'] as any, '07-메모') }]);
+  for (const [name, d] of docs) {
+    for (const th of THEMES) {
+      const a = applyTheme(d, th, ACCENTS[1]);
+      const h = await readHwpx(await docToHwpx(a));
+      same(`테마 ${th.name}: ${name} 저장(HWPX) → 열기`, a, h.doc);
+      const x = await readDocx(await docToDocx(a));
+      same(`테마 ${th.name}: ${name} 저장(DOCX) → 열기`, a, x.doc);
+      // 다른 테마를 입혔다가 이 테마로 바꿔도 처음부터 이 테마인 것과 같다
+      const other = THEMES[(THEMES.indexOf(th) + 1) % THEMES.length];
+      same(`테마 ${other.name} → ${th.name}: ${name} 바꿔 입히기`, a, applyTheme(applyTheme(d, other, ACCENTS[3]), th, ACCENTS[1]));
+    }
   }
 }
 
