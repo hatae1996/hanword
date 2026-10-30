@@ -275,3 +275,32 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .hw-dialog-pick .sub { font-size: 11.5px; color: var(--ui-muted); }
 .hw-dialog-pick:hover, .hw-dialog-pick:focus { border-color: var(--accent); outline: none; }
 .hw-dialog-act { padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ui-ink); cursor: pointer; font: inherit; }
+
+/* ── 작업 영역: 탐색 창 + 종이 ── */
+.workspace { flex: 1 1 auto; min-height: 0; display: flex; }
+.workspace > .desk { flex: 1 1 auto; }
+.navpane { flex: 0 0 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--chrome); }
+.navpane[hidden] { display: none; }
+.nav-tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--line); }
+.nav-tabs button { height: 30px; padding: 0 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ui-muted); font: 500 12.5px var(--font-ui); cursor: pointer; }
+.nav-tabs button.on { color: var(--ui-ink); border-bottom-color: var(--accent); }
+.nav-tabs .nav-close { margin-left: auto; color: var(--ui-muted); }
+.nav-body { flex: 1 1 auto; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.nav-body[hidden] { display: none; }
+.nav-item, .nav-hit { display: block; width: 100%; text-align: left; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent;
+  color: var(--ui-ink); font: 13px/1.4 var(--font-ui); cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
+.nav-item:hover, .nav-hit:hover { background: var(--chrome-2); }
+.nav-item.on, .nav-hit.on { background: var(--sel); }
+.nav-item.chapter { font-weight: 600; }
+.nav-item.lv1 { padding-left: 20px; }
+.nav-item.lv2 { padding-left: 32px; font-size: 12.5px; }
+.nav-item.drop { border-top: 2px solid var(--accent); }
+.nav-item.dragging { opacity: 0.5; }
+.nav-tail { min-height: 24px; flex: 1 0 24px; }
+.nav-hit mark { background: #FFE08A; color: inherit; border-radius: 2px; }
+.nav-empty { margin: 4px 4px 8px; color: var(--ui-muted); font-size: 12px; line-height: 1.5; }
+.statusbar .navtoggle { height: 24px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--ui-ink); font: 12px var(--font-ui); cursor: pointer; }
+.statusbar .navtoggle.on { background: var(--sel); border-color: var(--accent); }
+.btn.narrow { padding: 0 8px; }
+.update-bar.recover { background: #FFF4D6; color: #5A4300; border-bottom-color: #F0D58A; }
+.btn[hidden] { display: none; }

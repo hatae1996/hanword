@@ -22,6 +22,7 @@
         <div class="file-actions">
           <button id="new-doc" class="btn ghost" type="button" title="새 문서 (Ctrl+N)">새 문서</button>
           <button id="open-doc" class="btn ghost" type="button" title="한글(.hwpx)·Word(.docx) 문서 열기 (Ctrl+O)">열기</button>
+          <button id="recent-doc" class="btn ghost narrow" type="button" title="최근 문서" aria-label="최근 문서" hidden>최근 ▾</button>
           <button id="save-doc" class="btn ghost" type="button" title="저장 (Ctrl+S)">저장</button>
           <button id="save-hwpx" class="btn save hwp" type="button" title="한컴오피스 한글에서 여는 파일로 저장">
             <span class="fmt">HWPX</span> 한글로 저장
@@ -103,6 +104,14 @@
         <button id="update-later" class="btn ghost" type="button">나중에</button>
       </div>
 
+      <div class="update-bar recover" id="recover-bar" role="status" hidden>
+        <span id="recover-text"></span>
+        <button id="recover-now" class="btn save" type="button">복구</button>
+        <button id="recover-drop" class="btn ghost" type="button">버리기</button>
+      </div>
+
+      <div class="workspace">
+      <aside class="navpane" id="navpane" aria-label="탐색 창" hidden></aside>
       <main class="desk" id="desk">
         <div class="findbar" id="findbar" role="search" hidden>
           <input id="find-input" type="text" placeholder="찾을 내용" aria-label="찾을 내용" spellcheck="false" />
@@ -120,6 +129,7 @@
         <div class="ruler" id="ruler" aria-hidden="true"></div>
         <article class="page" id="page"><div id="editor"></div></article>
       </main>
+      </div>
 
       <footer class="statusbar">
         <span id="stat-file">새 문서</span>
@@ -130,6 +140,7 @@
         <span class="dot" aria-hidden="true">·</span>
         <span class="note">한글·Word 양쪽에서 똑같이 표현되는 기능만 제공합니다</span>
         <span class="toast" id="toast" role="status" aria-live="polite"></span>
+        <button class="navtoggle" id="nav-toggle" type="button" title="탐색 창: 목차·찾기 결과 (장 제목을 끌어 순서 바꾸기)">탐색 창</button>
         <span class="zoom" role="group" aria-label="화면 배율">
           <button id="zoom-out" type="button" title="축소 (Ctrl+휠 아래, Ctrl+-)" aria-label="축소">−</button>
           <button id="zoom-reset" type="button" title="100% 로 (Ctrl+0)">100%</button>

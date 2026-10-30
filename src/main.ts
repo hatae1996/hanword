@@ -31,9 +31,14 @@ import {
 } from './platform';
 import { SAMPLE_HTML } from './sample';
 import { appVersion, checkForUpdates } from './updater';
+import { clearRecovery, loadRecovery, setupAutosave } from './autosave';
+import { addRecent, recentFiles, removeRecent, whenText } from './recent';
+import { setupNavPane } from './ui/navpane';
+import { listDialog } from './ui/dialog';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 let loading = false; // 파일을 불러오는 중에는 '수정됨' 으로 표시하지 않는다
+let autosave: ReturnType<typeof setupAutosave> | undefined; // 아래 '자동 저장·복구' 에서 만든다
 const SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32];
 
 // ── 편집기 ─────────────────────────────────────────────
@@ -223,6 +228,7 @@ if (!titleInput.value) titleInput.value = isDesktop ? '새 문서' : '2026년 4�
 
 function markDirty(d: boolean) {
   state.dirty = d;
+  if (!d) void autosave?.reset();
   updateTitle();
 }
 function updateTitle() {
@@ -299,6 +305,7 @@ async function saveAs(format: Format) {
     if (!path) return;
     await writePath(path, await encode(format));
     Object.assign(state, { path, fileName: baseName(path), format, dropped: [] });
+    addRecent(path, baseName(path));
     markDirty(false);
     toast(`${baseName(path)} 저장됨`);
   });
@@ -317,6 +324,7 @@ async function saveCurrent() {
   }
   await withBusy(async () => {
     await writePath(state.path!, await encode(state.format!));
+    addRecent(state.path!, baseName(state.path!));
     state.dropped = [];
     markDirty(false);
     toast(`${baseName(state.path!)} 저장됨`);
@@ -363,6 +371,7 @@ async function loadFile(file: OpenedFile) {
     dropped: imported ? [] : warnings,
   });
   titleInput.value = doc.title || title;
+  if (file.path && !imported) addRecent(file.path, file.name);
   applyPage(doc.page);
   markDirty(imported);
   refresh();
@@ -540,7 +549,61 @@ window.addEventListener('beforeunload', (e) => {
   if (state.dirty && !isDesktop) e.preventDefault();
 });
 
-void wireDesktop({ isDirty: () => state.dirty, openPath });
+void wireDesktop({ isDirty: () => state.dirty, openPath, onDiscard: clearRecovery });
+
+// ── 최근 문서 (데스크톱) ─────────────────────────────────
+$('recent-doc').hidden = !isDesktop;
+$('recent-doc').addEventListener('click', () =>
+  listDialog(
+    '최근 문서',
+    recentFiles().map((r) => ({
+      label: r.name,
+      sub: `${whenText(r.at)} · ${r.path}`,
+      pick: () => void openPath(r.path),
+      action: { text: '목록에서 빼기', run: () => removeRecent(r.path) },
+    })),
+    '아직 열거나 저장한 문서가 없습니다.',
+  ),
+);
+
+// ── 탐색 창 ──────────────────────────────────────────────
+const navPane = setupNavPane(editor, { pane: $('navpane'), toggle: $('nav-toggle'), onFindMove: () => updateFindCount() });
+
+// ── 자동 저장·복구 ───────────────────────────────────────
+autosave = setupAutosave({
+  isDirty: () => state.dirty,
+  snapshot: () => ({
+    json: editor.getJSON(),
+    title: titleInput.value,
+    page: state.page,
+    path: state.path,
+    fileName: state.fileName,
+    format: state.format,
+    savedAt: new Date().toISOString(),
+  }),
+});
+void loadRecovery().then((snap) => {
+  if (!snap) return;
+  const bar = $('recover-bar');
+  const when = new Date(snap.savedAt);
+  $('recover-text').textContent = `저장하지 않고 끝난 문서가 있습니다 — "${snap.fileName ?? snap.title}" (${when.toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 복구본)`;
+  bar.hidden = false;
+  $('recover-now').onclick = () => {
+    loading = true;
+    editor.commands.setContent(snap.json as any);
+    loading = false;
+    Object.assign(state, { path: snap.path, fileName: snap.fileName, format: snap.format, page: snap.page ?? { ...DEFAULT_PAGE }, dropped: [] });
+    titleInput.value = snap.title;
+    applyPage(state.page);
+    markDirty(true);
+    bar.hidden = true;
+    toast('복구했습니다 — 꼭 저장하세요 (Ctrl+S)');
+  };
+  $('recover-drop').onclick = () => {
+    void clearRecovery();
+    bar.hidden = true;
+  };
+});
 
 // ── 버전 / 자동 업데이트 ─────────────────────────────────
 const updaterUi = {
@@ -558,4 +621,4 @@ $('app-version').addEventListener('click', () => checkForUpdates(updaterUi, true
 setTimeout(() => void checkForUpdates(updaterUi), 3000);
 
 // 디버그/테스트용
-Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable } });
+Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable, autosave, navPane, markDirty, recent: { addRecent, recentFiles, removeRecent } } });

@@ -89,6 +89,8 @@ export async function setWindowTitle(title: string) {
 export async function wireDesktop(opts: {
   isDirty: () => boolean;
   openPath: (path: string) => void;
+  /** "저장하지 않고 닫기"를 골랐을 때 (복구본 지우기) */
+  onDiscard?: () => Promise<unknown>;
 }): Promise<void> {
   if (!isDesktop) return;
   const [{ invoke }, dialog] = await tauri();
@@ -105,6 +107,7 @@ export async function wireDesktop(opts: {
       cancelLabel: '취소',
     });
     if (!close) event.preventDefault();
+    else await opts.onDiscard?.();
   });
 
   await getCurrentWebview().onDragDropEvent((e) => {

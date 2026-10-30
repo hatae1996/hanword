@@ -117,6 +117,14 @@ export function step(editor: Editor, dir: 1 | -1) {
   reveal(editor);
 }
 
+/** 찾은 것 중 i 번째로 이동 (탐색 창의 찾기 결과 목록) */
+export function goToMatch(editor: Editor, i: number) {
+  const s = findState(editor);
+  if (!s.matches[i]) return;
+  editor.view.dispatch(editor.state.tr.setMeta(key, { current: i }));
+  reveal(editor);
+}
+
 export function replaceCurrent(editor: Editor, replacement: string): boolean {
   const s = findState(editor);
   const m = s.matches[s.current];
