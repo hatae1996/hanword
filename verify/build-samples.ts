@@ -10,6 +10,10 @@ import { plainText } from '../src/model/resolve';
 import { docToDocx } from '../src/export/docx';
 import { docToHwpx } from '../src/export/hwpx';
 import { SAMPLES, SAMPLE_EXTRAS } from './samples';
+import { BUILTIN_TEMPLATES } from '../src/ui/templates';
+import { markdownToDoc } from '../src/ai/markdown';
+import { nodeGenerateJSON } from '../src/ai/node';
+import { readFileSync } from 'node:fs';
 
 const outDir = join(dirname(fileURLToPath(import.meta.url)), 'out');
 mkdirSync(outDir, { recursive: true });
@@ -19,6 +23,20 @@ for (const [name, json] of Object.entries(SAMPLES)) {
   writeFileSync(join(outDir, `${name}.docx`), await docToDocx(doc));
   writeFileSync(join(outDir, `${name}.hwpx`), await docToHwpx(doc));
   // 검증 스크립트가 "글자가 하나도 빠지지 않았는지" 비교할 기준 텍스트
+  writeFileSync(join(outDir, `${name}.expected.txt`), plainText(doc.blocks));
+  console.log(`✓ ${name}.docx / ${name}.hwpx`);
+}
+
+// 양식 모음과 AI 작성 예시도 같은 검사를 받는다 (verify.py · 렌더 · Windows 실제 프로그램 비교)
+const mdSamples: [string, string][] = [
+  ...BUILTIN_TEMPLATES.map((t, i): [string, string] => [`T${i + 1}-${t.name.replace(/\s+/g, '')}`, t.markdown]),
+  ['M1-AI보고서', readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'ai-보고서.md'), 'utf8')],
+  ['M2-공문보고서', readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', '공문-보고서.md'), 'utf8')],
+];
+for (const [name, md] of mdSamples) {
+  const { doc } = markdownToDoc(md, nodeGenerateJSON, name);
+  writeFileSync(join(outDir, `${name}.docx`), await docToDocx(doc));
+  writeFileSync(join(outDir, `${name}.hwpx`), await docToHwpx(doc));
   writeFileSync(join(outDir, `${name}.expected.txt`), plainText(doc.blocks));
   console.log(`✓ ${name}.docx / ${name}.hwpx`);
 }

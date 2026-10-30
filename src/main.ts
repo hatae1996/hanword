@@ -38,7 +38,8 @@ import { headerFooterDialog, pageNumberDialog, pageSetupDialog, paraShapeDialog 
 import { PageBreak } from './editor/pageBreak';
 import { availableWidthMm, imageAttrs, photoSheetHtml, prepareImage, resizeImageDialog } from './ui/images';
 import { contentWidthMm } from './model/defaults';
-import { listDialog } from './ui/dialog';
+import { listDialog, promptDialog } from './ui/dialog';
+import { BUILTIN_TEMPLATES, deleteMyTemplate, myTemplates, saveMyTemplate, type MyTemplate } from './ui/templates';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 let loading = false; // 파일을 불러오는 중에는 '수정됨' 으로 표시하지 않는다
@@ -530,6 +531,60 @@ async function newDoc() {
   markDirty(false);
   editor.commands.focus();
 }
+// ── 양식 모음 ────────────────────────────────────────────
+function startFrom(json: unknown, title: string, page: PageSetup, extra: { header?: Paragraph[]; footer?: Paragraph[]; pageNumber?: PageNumber }) {
+  loading = true;
+  editor.commands.setContent(json as any);
+  loading = false;
+  Object.assign(state, { path: undefined, fileName: undefined, format: undefined, page: { ...page }, dropped: [], ...extra });
+  titleInput.value = title;
+  applyPage(state.page);
+  markDirty(false);
+  refresh();
+  editor.commands.focus('start');
+  goToBlank(editor, 1); // 첫 빈칸(○○)으로
+}
+async function openTemplates() {
+  const mine = await myTemplates();
+  const gen = (html: string) => generateJSON(html, schemaExtensions()) as any;
+  await listDialog('양식으로 새 문서', [
+    ...BUILTIN_TEMPLATES.map((t) => ({
+      label: t.name,
+      sub: t.hint,
+      pick: async () => {
+        if (!(await confirmDiscard())) return;
+        const { doc } = markdownToDoc(t.markdown, gen, t.name);
+        startFrom(docToTiptap(doc), doc.title, doc.page, { header: doc.header, footer: doc.footer, pageNumber: doc.pageNumber });
+        toast(`"${t.name}" 양식 — Tab 으로 ○○ 빈칸을 차례로 채우세요`);
+      },
+    })),
+    ...mine.map((t: MyTemplate) => ({
+      label: `★ ${t.name}`,
+      sub: `내 양식 · ${new Date(t.savedAt).toLocaleDateString('ko-KR')}`,
+      pick: async () => {
+        if (!(await confirmDiscard())) return;
+        startFrom(t.json, t.title, t.page as PageSetup, { header: t.header as Paragraph[], footer: t.footer as Paragraph[], pageNumber: t.pageNumber as PageNumber });
+        toast(`"${t.name}" 내 양식으로 새 문서`);
+      },
+      action: { text: '지우기', run: () => void deleteMyTemplate(t.name) },
+    })),
+    {
+      label: '+ 지금 문서를 내 양식으로 저장…',
+      sub: '글자·표·쪽 설정을 그대로 보관합니다 (이 PC)',
+      pick: async () => {
+        const name = await promptDialog('내 양식으로 저장', '양식 이름', titleInput.value.trim());
+        if (!name) return;
+        await saveMyTemplate({
+          name, savedAt: new Date().toISOString(), json: editor.getJSON(), title: titleInput.value,
+          page: state.page, header: state.header, footer: state.footer, pageNumber: state.pageNumber,
+        });
+        toast(`"${name}" 을(를) 내 양식으로 저장했습니다 — 양식 버튼에서 고르세요`);
+      },
+    },
+  ]);
+}
+$('templates').addEventListener('click', () => void openTemplates());
+
 $('open-doc').addEventListener('click', () => openDialog());
 $('new-doc').addEventListener('click', () => newDoc());
 

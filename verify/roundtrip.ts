@@ -21,6 +21,7 @@ import { readHwpx } from '../src/import/hwpx';
 import { readDocx } from '../src/import/docx';
 import type { Doc } from '../src/model/types';
 import { SAMPLES, SAMPLE_EXTRAS } from './samples';
+import { BUILTIN_TEMPLATES } from '../src/ui/templates';
 import { docToMarkdown, markdownToDoc } from '../src/ai/markdown';
 import { nodeGenerateJSON } from '../src/ai/node';
 
@@ -111,6 +112,15 @@ for (const [name, json] of Object.entries(SAMPLES)) {
   same('공문 보고서: 마크다운 → Word 저장 → 열기', doc, (await readDocx(await docToDocx(doc))).doc);
   same('공문 보고서: 문서 → 마크다운 → 문서', doc, markdownToDoc(docToMarkdown(doc), nodeGenerateJSON).doc);
   same('공문 보고서: 편집기 거쳐 저장', doc, tiptapToDoc(docToTiptap(doc), doc.title, doc.page));
+}
+
+// ── 양식 모음 (앱의 "양식" 버튼) ─────────────────────────────
+for (const t of BUILTIN_TEMPLATES) {
+  const { doc, warnings } = markdownToDoc(t.markdown, nodeGenerateJSON, t.name);
+  ok(`양식 "${t.name}": 변환 경고 없음`, warnings.length === 0, warnings.join(', '));
+  ok(`양식 "${t.name}": 빈칸(○○) 있음`, /○○/.test(JSON.stringify(doc.blocks)));
+  same(`양식 "${t.name}": 한글 저장 → 열기`, doc, (await readHwpx(await docToHwpx(doc))).doc);
+  same(`양식 "${t.name}": Word 저장 → 열기`, doc, (await readDocx(await docToDocx(doc))).doc);
 }
 
 // ── 다른 프로그램이 만든 파일 ──────────────────────────────

@@ -438,9 +438,11 @@ class Reader {
     const m = kid(sect, 'pgMar');
     if (!sz || !m) return { ...DEFAULT_PAGE };
     const v = (n: string) => twipToMm(num(attr(m, n)) ?? 0);
-    const top = v('top'), bottom = v('bottom'), header = v('header'), footer = v('footer');
+    const top = v('top'), bottom = v('bottom');
+    const opt = (n: string) => (attr(m, n) === null ? undefined : v(n));
+    const header = opt('header'), footer = opt('footer');
     // units.ts pageToWord 의 역산: 한글 위 여백 = Word 머리말 위치, 한글 머리말 = 나머지
-    const split = (body: number, edge: number) => (edge > 0 && edge < body ? [edge, body - edge] : [body, 0]);
+    const split = (body: number, edge: number | undefined) => (edge !== undefined && edge >= 0 && edge < body ? [edge, body - edge] : [body, 0]);
     const [mt, hd] = split(top, header);
     const [mb, ft] = split(bottom, footer);
     let w = twipToMm(num(attr(sz, 'w')) ?? 11906);

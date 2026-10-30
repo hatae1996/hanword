@@ -105,11 +105,11 @@ export function pageFromMeta(meta: MdMeta): PageSetup {
   if (meta.landscape) [page.widthMm, page.heightMm] = [page.heightMm, page.widthMm];
   if (meta.margins) {
     // 여백은 "본문까지" 거리로 받는다 → 한글 방식(위 여백 + 머리말)으로 나눠 담기
+    // 머리말·꼬리말(쪽 번호) 자리가 종이 끝에 붙지 않도록 종이 끝 여백은 10mm 를 남긴다 (프린터가 못 찍는 곳)
     const [t, r, b, l] = meta.margins;
-    page.marginTopMm = Math.max(0, t - page.headerMm);
-    page.marginBottomMm = Math.max(0, b - page.footerMm);
-    if (t < page.headerMm) [page.marginTopMm, page.headerMm] = [t, 0];
-    if (b < page.footerMm) [page.marginBottomMm, page.footerMm] = [b, 0];
+    const split = (total: number, hf: number): [number, number] => (total >= hf + 10 ? [total - hf, hf] : total >= 10 ? [10, total - 10] : [total, 0]);
+    [page.marginTopMm, page.headerMm] = split(t, page.headerMm);
+    [page.marginBottomMm, page.footerMm] = split(b, page.footerMm);
     page.marginRightMm = r;
     page.marginLeftMm = l;
   }
