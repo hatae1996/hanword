@@ -15,7 +15,7 @@ const THICK: BorderLine = { style: 'solid', widthMm: 0.4, color: '#000000' };
 const DOUBLE: BorderLine = { style: 'double', widthMm: 0.5, color: '#000000' };
 const NONE: BorderLine = NO_BORDER;
 /** null = 그 변은 그대로 둔다 */
-type Rule = (side: Side, outer: boolean, ctx: { top: number; bottom: number; rectTop: number }) => BorderLine | undefined | null;
+type Rule = (side: Side, outer: boolean, ctx: { top: number; bottom: number; rectTop: number; headEnd: number }) => BorderLine | undefined | null;
 
 export const BORDER_PRESETS: Record<string, { label: string; whole?: boolean; rule: Rule }> = {
   default: { label: '기본 선', rule: () => THIN },
@@ -29,10 +29,11 @@ export const BORDER_PRESETS: Record<string, { label: string; whole?: boolean; ru
     label: '공문 표 (표 전체)',
     whole: true,
     // 위·아래 바깥선 굵게, 좌우 바깥선 없음, 머리행 아래 겹선, 안쪽은 가는 선
-    rule: (s, outer, { top, bottom, rectTop }) => {
+    // 머리행 = 첫 줄 (첫 줄 칸이 여러 줄을 합쳤으면 그 줄까지)
+    rule: (s, outer, { top, bottom, headEnd }) => {
       if (outer) return s === 'top' || s === 'bottom' ? THICK : NONE;
-      if (s === 'bottom' && top === rectTop && bottom === rectTop + 1) return DOUBLE;
-      if (s === 'top' && top === rectTop + 1) return DOUBLE;
+      if (s === 'bottom' && bottom === headEnd) return DOUBLE;
+      if (s === 'top' && top === headEnd) return DOUBLE;
       return THIN;
     },
   },
@@ -62,12 +63,14 @@ export function applyBorderPreset(editor: Editor, key: string): boolean {
   };
   const OPP: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
 
+  let headEnd = area.top + 1;
+  for (let col = area.left; col < area.right; col++) headEnd = Math.max(headEnd, map.findCell(map.map[area.top * map.width + col]).bottom);
   for (const pos of map.cellsInRect(area)) {
     const c = map.findCell(pos);
     for (const side of SIDES) {
       const outer =
         side === 'top' ? c.top === area.top : side === 'bottom' ? c.bottom === area.bottom : side === 'left' ? c.left === area.left : c.right === area.right;
-      const line = preset.rule(side, outer, { top: c.top, bottom: c.bottom, rectTop: area.top });
+      const line = preset.rule(side, outer, { top: c.top, bottom: c.bottom, rectTop: area.top, headEnd });
       if (line === null) continue;
       set(pos, side, line);
       if (!outer) continue;

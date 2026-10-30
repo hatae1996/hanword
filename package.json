@@ -7,7 +7,7 @@
     "predev": "npm run embed",
     "dev": "vite",
     "prebuild": "npm run embed",
-    "build": "vite build",
+    "build": "node scripts/copy-rhwp.mjs && vite build",
     "typecheck": "tsc",
     "presamples": "npm run embed",
     "samples": "tsx verify/build-samples.ts",

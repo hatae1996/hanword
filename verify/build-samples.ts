@@ -12,8 +12,9 @@ import { docToHwpx } from '../src/export/hwpx';
 import { SAMPLES, SAMPLE_EXTRAS } from './samples';
 import { BUILTIN_TEMPLATES } from '../src/ui/templates';
 import { markdownToDoc } from '../src/ai/markdown';
-import { nodeGenerateJSON } from '../src/ai/node';
-import { readFileSync } from 'node:fs';
+import { inlineImages, nodeGenerateJSON } from '../src/ai/node';
+import { readFileSync, readdirSync } from 'node:fs';
+const kitDir = join(dirname(fileURLToPath(import.meta.url)), 'kit');
 
 const outDir = join(dirname(fileURLToPath(import.meta.url)), 'out');
 mkdirSync(outDir, { recursive: true });
@@ -32,9 +33,10 @@ const mdSamples: [string, string][] = [
   ...BUILTIN_TEMPLATES.map((t, i): [string, string] => [`T${i + 1}-${t.name.replace(/\s+/g, '')}`, t.markdown]),
   ['M1-AI보고서', readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'ai-보고서.md'), 'utf8')],
   ['M2-공문보고서', readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', '공문-보고서.md'), 'utf8')],
+  ...readdirSync(kitDir).filter((f) => f.endsWith('.md')).sort().map((f): [string, string] => [f.replace(/\.md$/, ''), readFileSync(join(kitDir, f), 'utf8')]),
 ];
 for (const [name, md] of mdSamples) {
-  const { doc } = markdownToDoc(md, nodeGenerateJSON, name);
+  const { doc } = markdownToDoc(inlineImages(md, kitDir), nodeGenerateJSON, name);
   writeFileSync(join(outDir, `${name}.docx`), await docToDocx(doc));
   writeFileSync(join(outDir, `${name}.hwpx`), await docToHwpx(doc));
   writeFileSync(join(outDir, `${name}.expected.txt`), plainText(doc.blocks));

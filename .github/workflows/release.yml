@@ -63,4 +63,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run build:cli
-          gh release upload "v$(node -p "require('./package.json').version")" cli/hanword.mjs --clobber
+          node scripts/copy-rhwp.mjs
+          npm run samples
+          node scripts/make-verify-kit.mjs
+          gh release upload "v$(node -p "require('./package.json').version")" cli/hanword.mjs public/rhwp/rhwp.js public/rhwp/rhwp_bg.wasm "dist-kit/HanWord-검증꾸러미.zip" --clobber

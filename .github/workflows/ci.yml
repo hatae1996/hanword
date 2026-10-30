@@ -19,6 +19,25 @@ jobs:
       - run: npm ci
       - run: npx tsc
       - run: npm run roundtrip
+      # 실제 프로그램 검증 꾸러미: 스크립트 문법 + 실행 흐름 (이 가상 PC 에는 한글·Word 가 없어 두 검사는 건너뜀)
+      - run: npm run samples
+      - run: node scripts/make-verify-kit.mjs
+      - name: 검증 꾸러미 스크립트 실행 확인
+        shell: pwsh
+        run: |
+          $errs = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD\verify\windows\verify-in-office.ps1", [ref]$null, [ref]$errs)
+          if ($errs.Count) { $errs; exit 1 }
+          Expand-Archive dist-kit\HanWord-검증꾸러미.zip -DestinationPath kit-test
+          # 사용자 PC 와 같은 Windows PowerShell 5.1 로 실행 (검증-실행.cmd 와 같은 방법)
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\kit-test\verify-in-office.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if (-not (Test-Path .\kit-test\검증결과.txt)) { Write-Error "검증결과.txt 가 만들어지지 않았습니다"; exit 1 }
+          Get-Content .\kit-test\검증결과.txt
+      - name: 구형 .hwp 읽기 (변환기)
+        run: |
+          npm run build:cli
+          node cli/hanword.mjs verify/fixtures/02-표.hwp -o kit-test/표.md
 
   test:
     runs-on: ubuntu-latest

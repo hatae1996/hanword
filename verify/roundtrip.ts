@@ -9,7 +9,7 @@
  * 실행: npm run roundtrip
  */
 import { DOMParser } from '@xmldom/xmldom';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tiptapToDoc } from '../src/model/fromTiptap';
@@ -22,8 +22,10 @@ import { readDocx } from '../src/import/docx';
 import type { Doc } from '../src/model/types';
 import { SAMPLES, SAMPLE_EXTRAS } from './samples';
 import { BUILTIN_TEMPLATES } from '../src/ui/templates';
+import { readHwp } from '../src/import/hwp';
+import { loadRhwpNode } from '../src/import/hwpNode';
 import { docToMarkdown, markdownToDoc } from '../src/ai/markdown';
-import { nodeGenerateJSON } from '../src/ai/node';
+import { inlineImages, nodeGenerateJSON } from '../src/ai/node';
 
 (globalThis as any).DOMParser = DOMParser;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -121,6 +123,24 @@ for (const t of BUILTIN_TEMPLATES) {
   ok(`양식 "${t.name}": 빈칸(○○) 있음`, /○○/.test(JSON.stringify(doc.blocks)));
   same(`양식 "${t.name}": 한글 저장 → 열기`, doc, (await readHwpx(await docToHwpx(doc))).doc);
   same(`양식 "${t.name}": Word 저장 → 열기`, doc, (await readDocx(await docToDocx(doc))).doc);
+}
+
+// ── 실제 프로그램 검증용 추가 샘플 (verify/kit) ───────────────────
+{
+  const kitDir = join(here, 'kit');
+  for (const f of readdirSync(kitDir).filter((x) => x.endsWith('.md')).sort()) {
+    const { doc, warnings } = markdownToDoc(inlineImages(readFileSync(join(kitDir, f), 'utf8'), kitDir), nodeGenerateJSON, f);
+    ok(`검증 샘플 ${f}: 변환 경고 없음`, warnings.length === 0, warnings.join(', '));
+    same(`검증 샘플 ${f}: 한글 저장 → 열기`, doc, (await readHwpx(await docToHwpx(doc))).doc);
+    same(`검증 샘플 ${f}: Word 저장 → 열기`, doc, (await readDocx(await docToDocx(doc))).doc);
+  }
+}
+
+// ── 구형 .hwp (HWP 5.0) — python-hwpx 로 만든 .hwp 를 rhwp 로 읽어 원래 문서와 같은지 ─────
+for (const n of ['01-서식', '02-표', '06-사진']) {
+  const original = { ...tiptapToDoc(SAMPLES[n] as any, n), ...(SAMPLE_EXTRAS[n] ?? {}) };
+  const r = await readHwp(new Uint8Array(readFileSync(join(here, 'fixtures', `${n}.hwp`))), n, () => loadRhwpNode());
+  same(`구형 .hwp 열기: ${n}`, original, r.doc);
 }
 
 // ── 다른 프로그램이 만든 파일 ──────────────────────────────

@@ -10,16 +10,18 @@
  * 앱(HanWord)과 완전히 같은 변환 규칙·저장기를 쓴다. 만든 파일은 다시 열어 글자 누락이 없는지 스스로 확인한다.
  * 작성 문법: docs/AI-작성-가이드.md
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
-import { IMAGE_EXT, base64ToBytes, bytesToBase64, sniffMime } from '../src/model/image';
+import { IMAGE_EXT, base64ToBytes } from '../src/model/image';
 import type { ImageRun } from '../src/model/types';
-import { nodeGenerateJSON } from '../src/ai/node';
+import { inlineImages, nodeGenerateJSON } from '../src/ai/node';
 import { docToMarkdown, markdownToDoc } from '../src/ai/markdown';
 import { docToHwpx } from '../src/export/hwpx';
 import { docToDocx } from '../src/export/docx';
 import { readHwpx } from '../src/import/hwpx';
 import { readDocx } from '../src/import/docx';
+import { readHwp } from '../src/import/hwp';
+import { loadRhwpNode } from '../src/import/hwpNode';
 import { plainText } from '../src/model/resolve';
 import type { Doc } from '../src/model/types';
 
@@ -52,36 +54,8 @@ async function readInput(path: string): Promise<{ doc: Doc; warnings: string[] }
   }
   if (fmt === 'hwpx') return readHwpx(readFileSync(path), title);
   if (fmt === 'docx') return readDocx(readFileSync(path), title);
-  if (/\.hwp$/i.test(path)) throw new Error('구형 .hwp 는 읽을 수 없습니다. 한글에서 "다른 이름으로 저장 → HWPX" 후 다시 시도하세요.');
+  if (/\.hwp$/i.test(path)) return readHwp(new Uint8Array(readFileSync(path)), title, () => loadRhwpNode(process.argv[1]));
   throw new Error(`알 수 없는 입력 형식입니다: ${path} (.md, .hwpx, .docx 만 가능)`);
-}
-
-/** 마크다운 속 그림 파일 경로(![설명](사진.jpg), <img src="사진.jpg">)를 data: 주소로 바꾼다 (마크다운 파일 기준 상대 경로) */
-function inlineImages(md: string, baseDir: string): string {
-  const toData = (src: string): string | null => {
-    if (/^data:|^https?:/i.test(src)) return null;
-    const p = resolve(baseDir, decodeURI(src));
-    if (!existsSync(p)) {
-      console.error(`⚠ 그림 파일이 없습니다: ${src}`);
-      return null;
-    }
-    const bytes = new Uint8Array(readFileSync(p));
-    const mime = sniffMime(bytes);
-    if (!mime) {
-      console.error(`⚠ 그림 형식을 읽을 수 없습니다 (PNG·JPEG·GIF·BMP 만): ${src}`);
-      return null;
-    }
-    return `data:${mime};base64,${bytesToBase64(bytes)}`;
-  };
-  return md
-    .replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (m, alt: string, src: string) => {
-      const d = toData(src);
-      return d ? `<img src="${d}" alt="${alt.replace(/"/g, '')}">` : m;
-    })
-    .replace(/(<img\b[^>]*\bsrc\s*=\s*")([^"]+)(")/gi, (m, a: string, src: string, b: string) => {
-      const d = toData(src);
-      return d ? `${a}${d}${b}` : m;
-    });
 }
 
 /** 만든 파일을 다시 열어 글자가 하나도 빠지지 않았는지 확인 */

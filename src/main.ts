@@ -8,6 +8,7 @@ import { docToDocx } from './export/docx';
 import { docToHwpx } from './export/hwpx';
 import { readDocx } from './import/docx';
 import { readHwpx } from './import/hwpx';
+import { loadRhwpBrowser, readHwp } from './import/hwp';
 import { schemaExtensions } from './editor/extensions';
 import { FontSizeStep, stepFontSize } from './editor/fontSizeStep';
 import { setupZoom } from './editor/zoom';
@@ -470,14 +471,16 @@ async function confirmDiscard(): Promise<boolean> {
 
 async function loadFile(file: OpenedFile) {
   const ext = extOf(file.name);
-  if (ext === 'hwp') return toast('구형 .hwp 파일은 아직 열 수 없습니다. 한글에서 "다른 이름으로 저장 → HWPX"로 저장한 뒤 여세요.', true);
   if (ext === 'doc') return toast('구형 .doc 파일은 열 수 없습니다. Word 에서 .docx 로 저장한 뒤 여세요.', true);
-  if (ext !== 'hwpx' && ext !== 'docx' && ext !== 'md') return toast('한글(.hwpx), Word(.docx), 마크다운(.md) 파일만 열 수 있습니다.', true);
+  if (ext !== 'hwpx' && ext !== 'docx' && ext !== 'md' && ext !== 'hwp') return toast('한글(.hwpx·.hwp), Word(.docx), 마크다운(.md) 파일만 열 수 있습니다.', true);
+  if (ext === 'hwp') toast('구형 .hwp 를 여는 중입니다… (처음 한 번은 몇 초 걸립니다)');
   const title = file.name.replace(/\.[^.]+$/, '');
   const { doc, warnings } =
     ext === 'hwpx'
       ? await readHwpx(file.bytes, title)
-      : ext === 'docx'
+      : ext === 'hwp'
+        ? await readHwp(file.bytes, title, loadRhwpBrowser)
+        : ext === 'docx'
         ? await readDocx(file.bytes, title)
         : markdownToDoc(new TextDecoder().decode(file.bytes), (html) => generateJSON(html, schemaExtensions()) as any, title);
   loading = true;
@@ -487,8 +490,8 @@ async function loadFile(file: OpenedFile) {
     loading = false;
   }
   editor.commands.focus('start');
-  // 마크다운은 "가져오기" — 저장할 때 한글/Word 형식을 고른다 (원본 .md 를 덮어쓰지 않음)
-  const imported = ext === 'md';
+  // 마크다운·구형 .hwp 는 "가져오기" — 저장할 때 한글(.hwpx)/Word 형식을 고른다 (원본을 덮어쓰지 않음)
+  const imported = ext === 'md' || ext === 'hwp';
   Object.assign(state, {
     path: imported ? undefined : file.path,
     fileName: file.name,
@@ -504,7 +507,7 @@ async function loadFile(file: OpenedFile) {
   applyPage(doc.page);
   markDirty(imported);
   refresh();
-  if (imported) toast(`${file.name} 을(를) 가져왔습니다 — 한글로 저장 / Word로 저장 을 누르세요${warnings.length ? ` · 빠진 요소: ${warnings.join(', ')}` : ''}`);
+  if (imported) toast(`${file.name} 을(를) 가져왔습니다 — ${ext === 'hwp' ? '구형 .hwp 는 그대로 두고, ' : ''}한글로 저장(.hwpx) / Word로 저장 을 누르세요${warnings.length ? ` · 빠진 요소: ${warnings.join(', ')}` : ''}`);
   else toast(warnings.length ? `${file.name} 열림 · 아직 지원하지 않아 빠진 요소: ${warnings.join(', ')}` : `${file.name} 열림`, warnings.length > 0);
 }
 

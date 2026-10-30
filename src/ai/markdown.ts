@@ -224,11 +224,13 @@ function expandTableStyles(html: string, defaultStyle?: string): string {
       })),
     );
     const { placed, rowCount, colCount } = placeCells({ rows });
+    // 머리행: 첫 줄 (첫 줄 칸이 여러 줄을 합쳤으면 그 줄까지 — 두 줄짜리 머리글)
+    const headEnd = Math.max(1, ...(placed[0] ?? []).map((pc) => pc.rowspan));
     const css = placed.flat().map((pc) => {
       const side: Record<string, string> = {};
       if (pc.row === 0) side.top = '0.4mm solid #000000';
       if (pc.row + pc.rowspan >= rowCount) side.bottom = '0.4mm solid #000000';
-      else if (pc.row === 0 && pc.rowspan === 1) side.bottom = '0.5mm double #000000';
+      else if (pc.row + pc.rowspan === headEnd) side.bottom = '0.5mm double #000000';
       if (pc.col === 0) side.left = 'none';
       if (pc.col + pc.colspan >= colCount) side.right = 'none';
       return side;

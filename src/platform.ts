@@ -16,8 +16,8 @@ export const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' 
 
 const FILTERS = {
   open: [
-    { name: '문서 (한글, Word, 마크다운)', extensions: ['hwpx', 'docx', 'md'] },
-    { name: '한글 문서', extensions: ['hwpx'] },
+    { name: '문서 (한글, Word, 마크다운)', extensions: ['hwpx', 'hwp', 'docx', 'md'] },
+    { name: '한글 문서', extensions: ['hwpx', 'hwp'] },
     { name: 'Word 문서', extensions: ['docx'] },
     { name: 'AI 가 쓴 글 (마크다운)', extensions: ['md', 'markdown', 'txt'] },
   ],

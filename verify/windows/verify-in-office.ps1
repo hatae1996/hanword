@@ -8,9 +8,9 @@
   를 확인하고, 각 프로그램이 그린 결과를 PDF 로 저장한다 (verify\out\office-pdf).
   두 PDF 를 나란히 놓고 보면 "양쪽에서 같은 모양으로 보이는지" 바로 비교할 수 있다.
 
-  실행 (PowerShell):
-    npm run samples
-    powershell -ExecutionPolicy Bypass -File verify\windows\verify-in-office.ps1
+  실행:
+    검증 꾸러미: 압축을 풀고 "검증-실행.cmd" 를 두 번 누른다 → 같은 폴더에 "검증결과.txt"
+    저장소: npm run samples 후 powershell -ExecutionPolicy Bypass -File verify\windows\verify-in-office.ps1
 
   한글 자동화 보안 대화상자:
     한글은 외부 프로그램이 파일을 열 때마다 "접근 허용" 창을 띄운다.
@@ -18,7 +18,13 @@
     HKCU\SOFTWARE\HNC\HwpAutomation\Modules 에 FilePathCheckerModule = <dll 경로> 로 등록하면 창 없이 실행된다.
     등록하지 않았으면 창이 뜰 때 "모두 허용"을 누르면 된다.
 #>
-param([string]$Dir = (Join-Path $PSScriptRoot "..\out"))
+param([string]$Dir = "")
+
+# 검증 꾸러미(릴리스의 HanWord-검증꾸러미.zip)로 받았으면 옆의 "샘플" 폴더, 저장소에서는 verify\out
+if (-not $Dir) {
+  $kit = Join-Path $PSScriptRoot "샘플"
+  $Dir = if (Test-Path $kit) { $kit } else { Join-Path $PSScriptRoot "..\out" }
+}
 
 $ErrorActionPreference = "Stop"
 $Dir = (Resolve-Path $Dir).Path
@@ -81,7 +87,9 @@ if ($hwp) {
 }
 
 # ── 결과 ────────────────────────────────────────────────────
-$rows | Format-Table -AutoSize
+$table = $rows | Format-Table -AutoSize | Out-String -Width 200
+Write-Host $table
+$report = @("HanWord 실제 프로그램 검증 결과  $(Get-Date -Format 'yyyy-MM-dd HH:mm')", "Windows $([Environment]::OSVersion.Version)", $table)
 
 # 같은 샘플의 Word/한글 쪽 수 비교
 $bad = 0
@@ -89,10 +97,16 @@ foreach ($g in ($rows | Group-Object { [IO.Path]::GetFileNameWithoutExtension($_
   $w = $g.Group | Where-Object 프로그램 -eq "Word"
   $h = $g.Group | Where-Object 프로그램 -eq "한글"
   if ($w -and $h -and $w.쪽수 -ne $h.쪽수) {
-    Write-Host ("쪽 수 다름: {0}  Word {1}쪽 / 한글 {2}쪽  → src/model/units.ts 의 LINE_CALIBRATION 보정 필요" -f $g.Name, $w.쪽수, $h.쪽수) -ForegroundColor Yellow
+    $msg = "쪽 수 다름: {0}  Word {1}쪽 / 한글 {2}쪽" -f $g.Name, $w.쪽수, $h.쪽수
+    Write-Host $msg -ForegroundColor Yellow
+    $report += $msg
   }
 }
 foreach ($r in $rows) { if (-not $r.열림 -or $r.글자 -eq "불일치") { $bad++ } }
 Write-Host ""
 Write-Host "PDF 저장 위치: $pdfDir  (같은 이름의 .word.pdf 와 .hwp.pdf 를 나란히 비교하세요)"
+$report += if ($bad) { "문제 $bad 건" } else { "모두 통과" }
+$out = Join-Path $PSScriptRoot "검증결과.txt"
+[IO.File]::WriteAllLines($out, $report, (New-Object Text.UTF8Encoding $true))
+Write-Host "결과 파일: $out  (이 파일을 Claude 에게 보내 주면 맞춰 고칩니다)"
 if ($bad) { Write-Host "문제 $bad 건" -ForegroundColor Red; exit 1 } else { Write-Host "모두 통과" -ForegroundColor Green }
