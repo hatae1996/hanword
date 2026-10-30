@@ -18,7 +18,7 @@ export const CHAPTER_RE = /^\s*([ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ])\s*\.\s*\S/;
 /** 단계별 기호 (공문서 관례) */
 export const GAEJO_SYMBOLS = ['□', '○', '-', '·'] as const;
 /** 읽을 때 인정하는 기호 → 단계 */
-const LEVEL_OF: Record<string, number> = { '□': 0, '■': 0, '○': 1, '●': 1, '※': 1, '-': 2, '◦': 2, '▪': 2, '·': 3, '∙': 3 };
+export const LEVEL_OF: Record<string, number> = { '□': 0, '■': 0, '○': 1, '●': 1, '※': 1, '-': 2, '◦': 2, '▪': 2, '·': 3, '∙': 3 };
 
 export interface MarkerInfo {
   symbol: string;
@@ -37,7 +37,7 @@ export function markerOf(para: PMNode): MarkerInfo | null {
   return { symbol: m[1], level: LEVEL_OF[m[1]], length: m[0].length, hasText: text.length > m[0].length };
 }
 
-const indentAttrs = (level: number) => ({ indentLeft: level * GAEJO_STEP_MM + GAEJO_HANG_MM, firstLine: -GAEJO_HANG_MM, textAlign: 'left' });
+export const indentAttrs = (level: number) => ({ indentLeft: level * GAEJO_STEP_MM + GAEJO_HANG_MM, firstLine: -GAEJO_HANG_MM, textAlign: 'left' });
 
 /** 커서 문단 Enter 처리. 처리했으면 true */
 export function gaejoEnter(editor: Editor): boolean {

@@ -19,14 +19,14 @@ export interface FormOptions {
   groups?: Record<string, string>;
 }
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
+export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (text !== undefined) e.textContent = text;
   return e;
 }
 
-function shell(title: string): { dlg: HTMLDialogElement; body: HTMLElement; foot: HTMLElement } {
+export function shell(title: string): { dlg: HTMLDialogElement; body: HTMLElement; foot: HTMLElement } {
   const dlg = el('dialog', 'hw-dialog');
   dlg.setAttribute('aria-label', title);
   dlg.append(el('h2', 'hw-dialog-title', title));
@@ -37,7 +37,7 @@ function shell(title: string): { dlg: HTMLDialogElement; body: HTMLElement; foot
   return { dlg, body, foot };
 }
 
-function finish(dlg: HTMLDialogElement, restore: Element | null) {
+export function finish(dlg: HTMLDialogElement, restore: Element | null) {
   dlg.close();
   dlg.remove();
   if (restore instanceof HTMLElement) restore.focus();

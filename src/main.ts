@@ -32,6 +32,10 @@ import {
 } from './platform';
 import { SAMPLE_HTML } from './sample';
 import { applyPrintPage } from './ui/print';
+import { polishDialog } from './ui/polishDialog';
+import { ruleModes } from './ui/polishModes';
+import { aiModes } from './ui/aiModes';
+import { applyTexts, replaceRange, replaceWithItems, selectedBlocks } from './editor/polish';
 import { appVersion, checkForUpdates } from './updater';
 import { clearRecovery, loadRecovery, setupAutosave } from './autosave';
 import { addRecent, recentFiles, removeRecent, whenText } from './recent';
@@ -145,7 +149,28 @@ const commands: Record<string, () => void> = {
   'para-shape': () => void paraShapeDialog(editor),
   image: () => void pickAndInsertImages(),
   'photo-sheet': () => void makePhotoSheet(),
+  polish: () => void openPolish(),
 };
+
+// ── 문장 다듬기 (공문체·개조식, AI) ──────────────────────
+async function openPolish(first?: string) {
+  const blocks = selectedBlocks(editor);
+  if (!blocks.some((b) => b.text.trim())) return toast('다듬을 문단을 선택하거나 문단 안에 커서를 두세요', true);
+  const r = await polishDialog(blocks, [...ruleModes(), ...aiModes(editor, { setTitle: (t) => { titleInput.value = t; markDirty(true); updateTitle(); } })], first);
+  if (!r) return;
+  const p = r.preview;
+  let n = 0;
+  if (p.kind === 'texts') n = applyTexts(editor, blocks, p.texts);
+  else if (p.kind === 'items') n = replaceWithItems(editor, blocks, p.items);
+  else if (p.kind === 'replace') n = replaceRange(editor, blocks, p.paragraphs) ? blocks.length : 0;
+  else if (p.kind === 'choices' && r.choice) {
+    r.mode.apply?.(r.choice);
+    n = 1;
+  }
+  if (p.kind === 'replace' && !n) return toast('표 칸을 넘나드는 선택은 한 번에 바꿀 수 없습니다', true);
+  if (n) toast(`${r.mode.label}: ${p.kind === 'choices' ? '넣었습니다' : `${n}개 문단을 바꿨습니다`} (Ctrl+Z 로 되돌리기)`);
+  editor.commands.focus();
+}
 document.querySelectorAll<HTMLButtonElement>('[data-cmd]').forEach((b) => {
   b.type = 'button';
   b.addEventListener('mousedown', (e) => e.preventDefault()); // 선택 영역 유지
@@ -666,6 +691,9 @@ window.addEventListener('keydown', (e) => {
   } else if (k === 'o') {
     e.preventDefault();
     void openDialog();
+  } else if ((k === 'g' || e.code === 'KeyG') && e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    void openPolish();
   } else if ((k === 'p' || e.code === 'KeyP') && !e.shiftKey && !e.altKey) {
     e.preventDefault();
     void printDoc();

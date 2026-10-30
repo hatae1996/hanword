@@ -325,6 +325,36 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .ProseMirror img.hw-image { display: inline-block; vertical-align: bottom; max-width: 100%; height: auto; object-fit: contain; }
 .ProseMirror img.ProseMirror-selectednode { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* ── 문장 다듬기 창 ── */
+.hw-dialog.pl-dialog { width: min(760px, calc(100vw - 32px)); }
+.pl-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.pl-tab { height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 15px; background: var(--chrome); color: var(--ui-ink); font: 500 12.5px var(--font-ui); cursor: pointer; }
+.pl-tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.pl-tab.ai::after { content: 'AI'; margin-left: 5px; padding: 0 4px; border-radius: 3px; font-size: 9.5px; font-weight: 700; background: #6b4fd8; color: #fff; vertical-align: 1px; }
+.pl-tab.ai[aria-selected="true"]::after { background: #fff; color: #6b4fd8; }
+.pl-opts { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12.5px; }
+.pl-opts[hidden] { display: none; }
+.pl-opt { display: inline-flex; align-items: center; gap: 6px; }
+.pl-opt.text { flex: 1 1 100%; }
+.pl-opt.text .hw-dialog-input { flex: 1 1 auto; }
+.pl-status { margin: 2px 0 0; min-height: 1.4em; }
+.pl-dialog.busy .pl-status::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: pl-spin 0.8s linear infinite; vertical-align: -1px; }
+@keyframes pl-spin { to { transform: rotate(360deg); } }
+.pl-view { display: grid; gap: 8px; max-height: 46vh; overflow-y: auto; padding-right: 2px; }
+.pl-card { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--paper); color: var(--paper-ink); font: 13.5px/1.6 var(--font-doc); }
+.pl-line { padding: 6px 10px; white-space: pre-wrap; word-break: break-all; }
+.pl-line.before { color: #6b7280; background: #f7f7f8; border-bottom: 1px dashed var(--line); }
+.pl-line.before::before, .pl-line.after::before { display: block; font: 600 10.5px var(--font-ui); letter-spacing: 0.02em; color: #9aa1ab; margin-bottom: 1px; }
+.pl-line.before::before { content: '원래'; }
+.pl-line.after::before { content: '바뀐 글'; color: var(--accent); }
+.pl-line del { background: #fde2e1; color: #a1251b; text-decoration: line-through; border-radius: 2px; }
+.pl-line ins { background: #d9f2df; color: #0f5a2b; text-decoration: none; border-radius: 2px; }
+.pl-item.lv1 { padding-left: 1.2em; } .pl-item.lv2 { padding-left: 2.4em; } .pl-item.lv3 { padding-left: 3.6em; }
+.pl-choices { display: grid; gap: 6px; }
+.pl-choice { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--paper-ink); cursor: pointer; font: 14px/1.5 var(--font-doc); }
+.pl-choice:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.btn[hidden] { display: none; }
+
 /* ── 인쇄: 종이 내용만 (용지·여백·쪽 번호는 src/ui/print.ts 의 @page) ── */
 @media print {
   html, body { height: auto !important; background: #fff !important; }
