@@ -68,6 +68,8 @@ jobs:
       - run: npx tsc
       - run: npm run samples
       - run: npm run roundtrip
+      - name: 한글 쪽 수 (실제 한글 결과와 rhwp 비교)
+        run: npm run pages
       - name: AI 변환기 동작 확인
         run: |
           npm run build:cli

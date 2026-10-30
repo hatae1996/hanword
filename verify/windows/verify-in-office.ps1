@@ -66,7 +66,9 @@ function CheckText([string]$stem, [string]$prog, [string]$raw, [string]$ext) {
   [IO.File]::WriteAllText((Join-Path $pdfDir "$stem.$ext.txt"), $raw, (New-Object Text.UTF8Encoding $true))
   $exp = Expected $stem
   if (-not $exp) { return "-" }
-  $act = Squash $raw
+  # 한글 GetTextFile("TEXT") 는 옛 한글 코드(CP949)로 내보내서 거기 없는 글자(• ◦ — 줄 안 바뀜 빈칸 등)를
+  # &#8226; 같은 숫자 표기로 바꾼다 → 되돌려서 비교 (문서에는 제대로 들어 있음)
+  $act = Squash ([System.Net.WebUtility]::HtmlDecode($raw))
   if ($act -eq $exp) { return "일치" }
   $n = [Math]::Min($exp.Length, $act.Length); $k = 0
   while ($k -lt $n -and $exp[$k] -eq $act[$k]) { $k++ }

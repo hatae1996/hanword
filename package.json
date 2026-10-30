@@ -15,6 +15,7 @@
     "render:hwpx": "node verify/render-hwpx.mjs",
     "build:artifact": "npm run build && node scripts/make-artifact.mjs",
     "roundtrip": "tsx verify/roundtrip.ts",
+    "pages": "tsx verify/hangul-pages.ts",
     "tauri": "tauri",
     "app:dev": "tauri dev",
     "app:build": "tauri build",
