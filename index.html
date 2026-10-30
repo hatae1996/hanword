@@ -74,6 +74,7 @@
           <div class="table-tools" id="table-tools" hidden>
             <button class="tb wide" data-cmd="row-after" title="아래에 줄 추가">줄+</button>
             <button class="tb wide" data-cmd="col-after" title="오른쪽에 칸 추가">칸+</button>
+            <button class="tb wide" data-cmd="sum" title="합계: 더할 칸들과 합계 칸을 드래그해 선택하거나, 합계 칸에 커서를 두고 누르세요 (Ctrl+Shift+S)">∑ 합계</button>
             <button class="tb wide" data-cmd="merge" title="선택한 셀 합치기">셀 합치기</button>
             <button class="tb wide" data-cmd="split" title="셀 나누기">나누기</button>
             <label class="tb wide cellcolor" title="선택한 칸의 배경색">
@@ -95,6 +96,19 @@
       </div>
 
       <main class="desk" id="desk">
+        <div class="findbar" id="findbar" role="search" hidden>
+          <input id="find-input" type="text" placeholder="찾을 내용" aria-label="찾을 내용" spellcheck="false" />
+          <span class="find-count" id="find-count"></span>
+          <button type="button" id="find-prev" title="이전 (Shift+Enter)" aria-label="이전">↑</button>
+          <button type="button" id="find-next" title="다음 (Enter)" aria-label="다음">↓</button>
+          <span class="find-replace" id="find-replace-row">
+            <input id="replace-input" type="text" placeholder="바꿀 내용" aria-label="바꿀 내용" spellcheck="false" />
+            <button type="button" id="replace-one">바꾸기</button>
+            <button type="button" id="replace-all">모두 바꾸기</button>
+          </span>
+          <button type="button" id="find-toggle-replace" title="바꾸기 (Ctrl+H)">바꾸기 ▾</button>
+          <button type="button" id="find-close" title="닫기 (Esc)" aria-label="닫기">✕</button>
+        </div>
         <div class="ruler" id="ruler" aria-hidden="true"></div>
         <article class="page" id="page"><div id="editor"></div></article>
       </main>
@@ -103,6 +117,7 @@
         <span id="stat-file">새 문서</span>
         <span class="dot" aria-hidden="true">·</span>
         <span id="stat-chars">0자</span>
+        <button class="blanks" id="stat-blanks" type="button" title="다음 빈칸으로 (Tab)" hidden></button>
         <span class="dot" aria-hidden="true">·</span>
         <span class="note">한글·Word 양쪽에서 똑같이 표현되는 기능만 제공합니다</span>
         <span class="toast" id="toast" role="status" aria-live="polite"></span>

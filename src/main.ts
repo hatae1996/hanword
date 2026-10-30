@@ -12,6 +12,9 @@ import { schemaExtensions } from './editor/extensions';
 import { FontSizeStep, stepFontSize } from './editor/fontSizeStep';
 import { setupZoom } from './editor/zoom';
 import { MarkdownPaste } from './editor/markdownPaste';
+import { Blanks, goToBlank } from './editor/blanks';
+import { sumTable } from './editor/tableSum';
+import { FindReplace, clearFind, findState, replaceAll, replaceCurrent, setQuery, step as findStep } from './editor/findReplace';
 import { markdownToDoc } from './ai/markdown';
 import { generateJSON } from '@tiptap/html';
 import { safeFileName } from './save';
@@ -33,6 +36,8 @@ const editor = new Editor({
   extensions: [
     ...schemaExtensions({ resizableTables: true }),
     FontSizeStep,
+    Blanks.configure({ onCount: (n) => queueMicrotask(() => showBlanks(n)) }),
+    FindReplace,
     MarkdownPaste.configure({
       onConverted: (w) =>
         toast(`AI 글(마크다운)을 서식으로 바꿔 붙여넣었습니다${w.length ? ` · 빠진 요소: ${w.join(', ')}` : ''} — 글자 그대로는 Ctrl+Shift+V`),
@@ -86,6 +91,11 @@ const commands: Record<string, () => void> = {
   'col-del': () => chain().deleteColumn().run(),
   'table-del': () => chain().deleteTable().run(),
   'cell-nocolor': () => chain().setCellAttribute('backgroundColor', null).run(),
+  sum: () => {
+    const r = sumTable(editor);
+    toast(r.message, !r.ok);
+    editor.commands.focus();
+  },
 };
 document.querySelectorAll<HTMLButtonElement>('[data-cmd]').forEach((b) => {
   b.type = 'button';
@@ -350,12 +360,26 @@ $('new-doc').addEventListener('click', () => newDoc());
 
 // ── 단축키 ───────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
+  // 한글 단축키: Alt+V 다른 이름으로 저장
+  if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'KeyV' || e.key.toLowerCase() === 'v')) {
+    e.preventDefault();
+    void saveAs(state.format ?? 'hwpx');
+    return;
+  }
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
-  if (k === 's') {
+  if (k === 's' || e.code === 'KeyS') {
     e.preventDefault();
-    if (e.shiftKey) void saveAs(state.format ?? 'hwpx');
+    // 한글처럼 표 안에서 Ctrl+Shift+S 는 블록 합계, 표 밖에서는 다른 이름으로 저장
+    if (e.shiftKey && editor.isActive('table')) commands.sum();
+    else if (e.shiftKey) void saveAs(state.format ?? 'hwpx');
     else void saveCurrent();
+  } else if (k === 'f' || e.code === 'KeyF') {
+    e.preventDefault();
+    openFind(false);
+  } else if (k === 'h' || e.code === 'KeyH') {
+    e.preventDefault();
+    openFind(true);
   } else if (k === 'o') {
     e.preventDefault();
     void openDialog();
@@ -363,6 +387,81 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     void newDoc();
   }
+});
+
+// ── 빈칸(○○) ────────────────────────────────────────────
+function showBlanks(n: number) {
+  const b = $<HTMLButtonElement>('stat-blanks');
+  b.hidden = n === 0;
+  b.textContent = `빈칸 ${n}개 · Tab`;
+}
+$('stat-blanks').addEventListener('click', () => goToBlank(editor, 1));
+
+// ── 찾기·바꾸기 ───────────────────────────────────────────
+const findbar = $('findbar');
+const findInput = $<HTMLInputElement>('find-input');
+const replaceInput = $<HTMLInputElement>('replace-input');
+function updateFindCount() {
+  const s = findState(editor);
+  const c = $('find-count');
+  c.textContent = !s.query ? '' : s.matches.length ? `${s.current + 1}/${s.matches.length}` : '없음';
+  c.classList.toggle('none', !!s.query && !s.matches.length);
+}
+function openFind(withReplace: boolean) {
+  findbar.hidden = false;
+  $('find-replace-row').hidden = !withReplace;
+  // 선택한 글자가 있으면 그것을 찾는다
+  const { from, to } = editor.state.selection;
+  const picked = editor.state.doc.textBetween(from, to, ' ');
+  if (picked && picked.length < 80 && !picked.includes('\n')) findInput.value = picked;
+  findInput.focus();
+  findInput.select();
+  setQuery(editor, findInput.value);
+  findInput.focus();
+  updateFindCount();
+}
+function closeFind() {
+  findbar.hidden = true;
+  clearFind(editor);
+  editor.commands.focus();
+}
+findInput.addEventListener('input', () => {
+  setQuery(editor, findInput.value);
+  findInput.focus();
+  updateFindCount();
+});
+findInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    findStep(editor, e.shiftKey ? -1 : 1);
+    findInput.focus();
+    updateFindCount();
+  } else if (e.key === 'Escape') closeFind();
+});
+replaceInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    replaceCurrent(editor, replaceInput.value);
+    replaceInput.focus();
+    updateFindCount();
+  } else if (e.key === 'Escape') closeFind();
+});
+$('find-next').addEventListener('click', () => (findStep(editor, 1), updateFindCount()));
+$('find-prev').addEventListener('click', () => (findStep(editor, -1), updateFindCount()));
+$('replace-one').addEventListener('click', () => (replaceCurrent(editor, replaceInput.value), updateFindCount()));
+$('replace-all').addEventListener('click', () => {
+  const n = replaceAll(editor, replaceInput.value);
+  updateFindCount();
+  toast(n ? `${n}곳을 바꿨습니다` : '바꿀 내용이 없습니다', !n);
+});
+$('find-toggle-replace').addEventListener('click', () => {
+  const row = $('find-replace-row');
+  row.hidden = !row.hidden;
+  (row.hidden ? findInput : replaceInput).focus();
+});
+$('find-close').addEventListener('click', closeFind);
+editor.on('update', () => {
+  if (!findbar.hidden) updateFindCount();
 });
 
 // 브라우저: 실수로 탭을 닫을 때 경고 (데스크톱은 wireDesktop 이 처리)
@@ -388,4 +487,4 @@ $('app-version').addEventListener('click', () => checkForUpdates(updaterUi, true
 setTimeout(() => void checkForUpdates(updaterUi), 3000);
 
 // 디버그/테스트용
-Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state } });
+Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable } });

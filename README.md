@@ -25,6 +25,19 @@ AI 가 마크다운으로 쓴 글을 HanWord 가 한글(.hwpx)·Word(.docx)로 �
 - 작성 문법·공문 관례: [docs/AI-작성-가이드.md](docs/AI-작성-가이드.md) — 개조식(□ ○ ◦ ·), 병합 표, 색·크기, 문서 설정
 - 변환 규칙은 앱 편집기와 같은 코드(`src/ai/markdown.ts`, `src/editor/extensions.ts`)를 쓴다
 
+## 편집 기능
+
+| 기능 | 사용법 |
+|---|---|
+| 빈칸 채우기 | `○○` 자리가 노란색으로 표시됨 · **Tab** / Shift+Tab 으로 다음·이전 빈칸 선택 후 바로 입력 (한글 누름틀처럼) |
+| 표 합계 | 더할 칸과 합계 칸을 드래그 → **∑ 합계** 또는 **Ctrl+Shift+S** (한글 블록 합계). 합계 칸에 커서만 두고 눌러도 위쪽 숫자를 더함 |
+| 찾기·바꾸기 | **Ctrl+F** / **Ctrl+H** · Enter 다음, Shift+Enter 이전, 모두 바꾸기 |
+| 글자 크기 | **Ctrl+]** 크게 / **Ctrl+[** 작게 |
+| 화면 배율 | **Ctrl+휠**, Ctrl+= / Ctrl+- / Ctrl+0 |
+| 칸 배경색 | 표 안에서 **칸 색** / **색 없음** |
+| AI 글 붙여넣기 | ChatGPT·Claude 답변을 Ctrl+V → 서식으로 변환 (글자 그대로는 Ctrl+Shift+V) |
+| 저장 | Ctrl+S · 다른 이름으로 저장 Ctrl+Shift+S(표 밖) 또는 **Alt+V** (한글과 같음) |
+
 ## 실행
 
 ```bash

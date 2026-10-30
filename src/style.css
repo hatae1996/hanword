@@ -187,6 +187,27 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .update-bar span { flex: 1 1 260px; min-width: 0; }
 .update-bar .btn.save { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
+/* ── 빈칸(○○) · 찾기 표시 (화면에서만) ── */
+.ProseMirror .hw-blank { background: #FFF2A8; border-radius: 2px; box-shadow: 0 0 0 1px #F2D64B inset; }
+.ProseMirror .hw-find { background: #FFE08A; border-radius: 2px; }
+.ProseMirror .hw-find-current { background: #FF9F43; color: #000; }
+
+/* ── 찾기 막대 ── */
+.findbar {
+  position: sticky; top: 0; z-index: 5; margin: -6px auto 10px; width: fit-content; max-width: 100%; box-sizing: border-box;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px;
+  background: var(--chrome); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(20, 30, 45, 0.12);
+}
+.findbar[hidden] { display: none; }
+.findbar input { height: 30px; box-sizing: border-box; width: 200px; max-width: 46vw; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--paper-ink); font: 13px var(--font-ui); }
+.findbar input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.findbar button { height: 30px; min-width: 30px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ui-ink); font: 500 12.5px var(--font-ui); cursor: pointer; }
+.findbar button:hover { background: var(--chrome-2); border-color: var(--line); }
+.findbar .find-count { min-width: 44px; color: var(--ui-muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+.findbar .find-count.none { color: var(--danger); }
+.findbar .find-replace { display: inline-flex; gap: 6px; align-items: center; }
+.findbar .find-replace[hidden] { display: none; }
+
 /* ── 상태 표시줄 ── */
 .statusbar {
   display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-height: 30px;
@@ -197,6 +218,8 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
   font-variant-numeric: tabular-nums;
 }
 .statusbar .toast { margin-left: auto; color: var(--ui-ink); font-weight: 500; }
+.statusbar .blanks { border: 1px solid #F2D64B; background: #FFF2A8; color: #5a4a00; font: 500 12px var(--font-ui); border-radius: 10px; padding: 1px 9px; cursor: pointer; }
+.statusbar .blanks[hidden] { display: none; }
 .statusbar .zoom { display: inline-flex; align-items: center; gap: 2px; }
 .statusbar .zoom button { border: 0; background: none; color: var(--ui-muted); font: inherit; min-width: 24px; height: 22px; border-radius: 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
 .statusbar .zoom button:hover { color: var(--ui-ink); background: var(--chrome-2); }
