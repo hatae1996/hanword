@@ -1,6 +1,7 @@
 /** 작은 단위 검사 — 문장 다듬기 규칙 (npm run unit) */
 import { diffEdits, nominalize, splitSentences, toGaejoItems, toGongmun } from '../src/ai/polish';
 import { numbered, parseNumbered } from '../src/ai/claude';
+import { matchKo, rank } from '../src/ui/commandPalette';
 
 let bad = 0;
 let n = 0;
@@ -32,6 +33,17 @@ eq('개조식 항목', toGaejoItems('○ 기록물 이관을 완료하였습니�
 eq('AI 문단 번호 붙이기', numbered(['가', '나']), '[1] 가\n[2] 나');
 eq('AI 답 읽기 (순서·이어진 줄·앞뒤 말)', parseNumbered('네, 고쳤습니다.\n[2] 둘째\n[1] 첫째\n이어짐\n\n[3] 셋째'), ['첫째 이어짐', '둘째', '셋째']);
 eq('AI 답 읽기 (첫째 뒤 이어진 줄)', parseNumbered('[1] 첫째\n이어짐\n[2] 둘째'), ['첫째 이어짐', '둘째']);
+
+eq('초성 찾기 ㅉㅂㅎ → 쪽 번호', matchKo('쪽 번호', 'ㅉㅂㅎ'), 0);
+eq('초성+글자 섞어 찾기 모ㄷ → 모던 테마', matchKo('모던 테마로 바꾸기', '모ㄷ'), 0);
+eq('띄어쓰기 무시', matchKo('한글로 저장', '한글로저장'), 0);
+eq('영문 대소문자 무시', matchKo('Word로 저장', 'word'), 0);
+eq('없는 말', matchKo('쪽 번호', 'ㅁㅁ'), -1);
+{
+  const items = ['다듬기: 공문체로', '쪽 번호', '쪽 나누기', '공문 테마로 바꾸기'].map((label) => ({ id: label, label, group: 'g', run: () => {} }));
+  eq('순위: 앞에서 맞을수록 위', rank(items, 'ㄱㅁ').map((i) => i.label), ['공문 테마로 바꾸기', '다듬기: 공문체로']);
+  eq('순위: 쪽', rank(items, '쪽').map((i) => i.label), ['쪽 번호', '쪽 나누기']);
+}
 
 for (let k = 0; k < 500; k++) {
   const rnd = (len: number) => Array.from({ length: len }, () => '가나다라 .'[(Math.random() * 6) | 0]).join('');

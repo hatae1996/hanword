@@ -39,6 +39,10 @@ import { applyTexts, replaceRange, replaceWithItems, selectedBlocks } from './ed
 import { addMemo, gotoNextMemo, listMemos, memoAt, updateMemo, wordRange } from './editor/memo';
 import { memoDialog } from './ui/memoDialog';
 import { setupDesignPanel } from './ui/designPanel';
+import { BlockHandles } from './editor/blocks';
+import { openBlockMenu } from './ui/blockMenu';
+import { openCommandPalette, type PaletteItem } from './ui/commandPalette';
+import { THEMES } from './design/themes';
 import { applyTheme } from './design/apply';
 import { accentById, themeById } from './design/themes';
 import { closeHistory } from '@tiptap/pm/history';
@@ -76,6 +80,7 @@ const editor = new Editor({
     FindReplace,
     Gaejo,
     PageBreak,
+    BlockHandles.configure({ onMenu: (g, el) => openBlockMenu(editor, g, el) }),
     TableKeys.configure({ calc: (o) => calc(o) }),
     SlashMenu.configure({
       items: () => [
@@ -776,6 +781,9 @@ window.addEventListener('keydown', (e) => {
   } else if (k === 'o') {
     e.preventDefault();
     void openDialog();
+  } else if ((k === 'k' || e.code === 'KeyK') && !e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    openPalette();
   } else if ((k === 'g' || e.code === 'KeyG') && e.shiftKey && !e.altKey) {
     e.preventDefault();
     void openPolish();
@@ -1011,3 +1019,78 @@ setTimeout(() => void checkForUpdates(updaterUi), 3000);
 
 // 디버그/테스트용
 Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable, currentDoc, autosave, navPane, markDirty, recent: { addRecent, recentFiles, removeRecent } } });
+
+// ── 명령 창 (Ctrl+K) ─────────────────────────────────────
+function paletteItems(): PaletteItem[] {
+  const items: PaletteItem[] = [];
+  const keysOf = (title: string) => title.match(/\(((?:Ctrl|Alt|F\d|Shift)[^)]*)\)/)?.[1];
+  const clean = (t: string) => t.replace(/\s+/g, ' ').trim();
+  // 위쪽 단추
+  const top: [string, string][] = [['new-doc', '새 문서'], ['templates', '양식으로 새 문서'], ['design', '디자인 (문서 테마)'], ['open-doc', '열기'], ['recent-doc', '최근 문서'],
+    ['save-doc', '저장'], ['print-doc', '인쇄'], ['save-hwpx', '한글로 저장 (.hwpx)'], ['save-docx', 'Word로 저장 (.docx)']];
+  for (const [id, label] of top) {
+    const b = document.getElementById(id) as HTMLButtonElement | null;
+    if (!b || b.hidden) continue;
+    items.push({ id: `top:${id}`, label, group: '파일', keys: keysOf(b.title), hint: clean(b.title.replace(/\([^)]*\)/g, '')).slice(0, 40), run: () => b.click() });
+  }
+  // 리본
+  document.querySelectorAll<HTMLButtonElement>('.ribbon [data-cmd]').forEach((b) => {
+    const cmd = b.dataset.cmd!;
+    if (!commands[cmd]) return;
+    const label = clean(b.getAttribute('aria-label') || b.textContent || cmd).replace(/[−+]$/, (m) => (m === '+' ? ' 크게' : ' 작게'));
+    const inTable = !!b.closest('#table-tools');
+    items.push({
+      id: `cmd:${cmd}`,
+      label: inTable ? `표: ${label}` : label,
+      group: inTable ? '표' : '편집',
+      keys: keysOf(b.title),
+      hint: clean(b.title.split(/[(:—]/)[0]).slice(0, 40),
+      keywords: b.title,
+      run: () => {
+        editor.commands.focus();
+        commands[cmd]();
+      },
+    });
+  });
+  // 그 밖의 기능
+  const more: [string, string, string | undefined, () => void, string?][] = [
+    ['find', '찾기', 'Ctrl+F', () => openFind(false)],
+    ['replace', '찾아 바꾸기', 'Ctrl+H', () => openFind(true)],
+    ['nav', '탐색 창 (목차·장 옮기기)', undefined, () => $('nav-toggle').click(), '목차 개요'],
+    ['snippets', '상용구 목록', 'Ctrl+F3', () => void openSnippetList(editor)],
+    ['zoom-in', '화면 확대', 'Ctrl+=', () => zoomCtl!.step(1)],
+    ['zoom-out', '화면 축소', 'Ctrl+-', () => zoomCtl!.step(-1)],
+    ['zoom-reset', '화면 100%', 'Ctrl+0', () => zoomCtl!.set(1)],
+    ['memo-next', '다음 메모로', undefined, () => gotoNextMemo(editor)],
+    ['block-up', '블록 위로 옮기기 (아래 항목과 함께)', 'Alt+Shift+↑', () => editor.commands.keyboardShortcut('Alt-Shift-ArrowUp')],
+    ['block-down', '블록 아래로 옮기기 (아래 항목과 함께)', 'Alt+Shift+↓', () => editor.commands.keyboardShortcut('Alt-Shift-ArrowDown')],
+  ];
+  for (const [id, label, keys, run, kw] of more) items.push({ id: `more:${id}`, label, group: '보기·이동', keys, keywords: kw, run: () => (editor.commands.focus(), run()) });
+  // 테마
+  for (const t of THEMES) items.push({ id: `theme:${t.id}`, label: `${t.name} 테마로 바꾸기`, group: '디자인', hint: t.hint.slice(0, 40), keywords: '디자인 테마', run: () => applyDesign(t.id, design.accentId) });
+  // 다듬기 방식
+  for (const m of [...ruleModes(), ...aiModes(editor, { setTitle: () => {} })]) {
+    items.push({ id: `polish:${m.id}`, label: `다듬기: ${m.label}`, group: m.ai ? 'AI' : '다듬기', hint: m.hint.slice(0, 40), keys: m.id === 'gongmun' ? 'Ctrl+Shift+G' : undefined, run: () => void openPolish(m.id) });
+  }
+  // 보고서 부품: 커서 자리에 (글이 있는 줄이면 새 줄을 만들어)
+  for (const part of reportParts()) {
+    items.push({
+      id: `part:${part.label}`,
+      label: `${part.label} 넣기`,
+      group: '부품',
+      hint: part.hint,
+      keywords: part.keywords,
+      run: () => {
+        editor.commands.focus();
+        if (editor.state.selection.$from.parent.textContent.trim()) editor.commands.splitBlock();
+        const at = editor.state.selection.from;
+        part.run(editor, { from: at, to: at });
+      },
+    });
+  }
+  return items;
+}
+function openPalette() {
+  openCommandPalette(paletteItems());
+}
+$('palette').addEventListener('click', () => openPalette());
