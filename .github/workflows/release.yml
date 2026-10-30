@@ -66,4 +66,6 @@ jobs:
           node scripts/copy-rhwp.mjs
           npm run samples
           node scripts/make-verify-kit.mjs
-          gh release upload "v$(node -p "require('./package.json').version")" cli/hanword.mjs public/rhwp/rhwp.js public/rhwp/rhwp_bg.wasm "dist-kit/HanWord-검증꾸러미.zip" --clobber
+          # 릴리스 파일 이름에 한글이 있으면 GitHub 가 이름을 바꿔 버리므로 영문 이름으로 올린다
+          cp "dist-kit/HanWord-검증꾸러미.zip" dist-kit/HanWord-verify-kit.zip
+          gh release upload "v$(node -p "require('./package.json').version")" cli/hanword.mjs public/rhwp/rhwp.js public/rhwp/rhwp_bg.wasm "dist-kit/HanWord-verify-kit.zip#HanWord-verify-kit.zip (실제 한글·Word 검증 꾸러미)" --clobber
