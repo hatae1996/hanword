@@ -4,3 +4,10 @@
 *.png binary
 *.ico binary
 *.icns binary
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.hwp binary
+*.hwpx binary
+*.docx binary
+*.png binary
+*.jpg binary
