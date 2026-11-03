@@ -259,6 +259,8 @@ class SectionBuilder {
   private memoInfo = new Map<string, Memo>();
   private memoOrder: { id: string; n: number }[] = [];
   private openMemo: string | null = null;
+  /** 본문 높이 (HWPUNIT) — 이보다 긴 표는 쪽에서 나뉘게 저장 */
+  contentHeight = Infinity;
 
   constructor(private readonly hb: HeaderBuilder) {}
 
@@ -410,10 +412,13 @@ class SectionBuilder {
     const totalW = colW.reduce((a, b) => a + b, 0);
     const totalH = rowH.reduce((a, b) => a + b, 0);
     const id = this.nextObjId++;
+    // 글자처럼 취급(treatAsChar)한 표는 한글이 쪽에서 나누지 못한다 — 긴 표가 통째로 다음 쪽으로 가거나 종이 밖으로 넘친다.
+    // 쪽 높이의 70% 가 넘는 표만 "글자처럼 취급 안 함"으로 저장해 줄 단위로 나뉘게 한다 (짧은 표는 실제 한글로 확인한 배치 그대로)
+    const asChar = totalH <= this.contentHeight * 0.7;
     const tbl =
       `<hp:tbl id="${1000000000 + id}" zOrder="${id - 1}" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCount}" colCnt="${colCount}" cellSpacing="0" borderFillIDRef="${bf}" noAdjust="0">` +
       `<hp:sz width="${totalW}" widthRelTo="ABSOLUTE" height="${totalH}" heightRelTo="ABSOLUTE" protect="0"/>` +
-      `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>` +
+      `<hp:pos treatAsChar="${asChar ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>` +
       `<hp:outMargin left="0" right="0" top="0" bottom="0"/>${margin('inMargin')}${rows}</hp:tbl>`;
 
     // 표를 담는 문단: 줄 간격 100%, 여백 0 (Word 의 표 배치와 같은 높이가 되도록)
@@ -461,6 +466,8 @@ export async function docToHwpx(doc: Doc, now = new Date()): Promise<Uint8Array>
   const hb = new HeaderBuilder(headerTpl);
   const sb = new SectionBuilder(hb);
   sb.setMemos(doc.memos);
+  const pg = doc.page;
+  sb.contentHeight = mmToHwp(pg.heightMm - pg.marginTopMm - pg.headerMm - pg.marginBottomMm - pg.footerMm);
   // 쪽 번호(한글 "쪽 번호 매기기")·머리말·꼬리말은 첫 문단의 구역 설정 run 끝에 붙는다
   let extra = '';
   if (doc.header?.length) extra += sb.headerFooter('header', doc.header, doc);

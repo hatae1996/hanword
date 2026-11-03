@@ -25,5 +25,5 @@ for (const [stem, pages] of Object.entries(want)) {
   if (!ok) bad++;
   console.log(`${ok ? '✅' : '❌'} ${stem}: 한글 ${pages}쪽 / rhwp ${got}쪽`);
 }
-console.log(bad ? `\n${bad}개 쪽 수 다름` : `\n한글 쪽 수 ${Object.keys(want).length - 1}종 모두 같음`);
+console.log(bad ? `\n${bad}개 쪽 수 다름` : `\n한글 쪽 수 ${Object.keys(want).filter((k) => !k.startsWith('_')).length}종 모두 같음`);
 process.exit(bad ? 1 : 0);

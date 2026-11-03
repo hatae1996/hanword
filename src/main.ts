@@ -41,6 +41,8 @@ import { memoDialog } from './ui/memoDialog';
 import { setupDesignPanel } from './ui/designPanel';
 import { BlockHandles } from './editor/blocks';
 import { openBlockMenu } from './ui/blockMenu';
+import { Pages, pageAt, pagesKey, pagesOf, setPageView, setPagination } from './editor/pages';
+import { paginate } from './layout/pagination';
 import { openCommandPalette, type PaletteItem } from './ui/commandPalette';
 import { THEMES } from './design/themes';
 import { applyTheme } from './design/apply';
@@ -65,6 +67,12 @@ const SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32];
 
 // ── 편집기 ─────────────────────────────────────────────
 // 문서 구조는 editor/extensions.ts (AI 변환기와 공유)
+// 쪽 보기 상태 (편집기보다 먼저 있어야 함)
+let pageTotal = 1;
+let pagingTimer = 0;
+let pagingRun = 0;
+let rhwpOk: boolean | null = null;
+
 const editor = new Editor({
   element: $('editor'),
   extensions: [
@@ -81,6 +89,16 @@ const editor = new Editor({
     Gaejo,
     PageBreak,
     BlockHandles.configure({ onMenu: (g, el) => openBlockMenu(editor, g, el) }),
+    Pages.configure({
+      look: () => (typeof state === 'undefined' ? { page: DEFAULT_PAGE } : pageLook()),
+      onLayout: ({ pages }) => {
+        if (pages !== pageTotal) {
+          pageTotal = pages;
+          renderHeaderFooter(false);
+        }
+        showPageStatus();
+      },
+    }),
     TableKeys.configure({ calc: (o) => calc(o) }),
     SlashMenu.configure({
       items: () => [
@@ -101,8 +119,12 @@ const editor = new Editor({
     if (!loading) markDirty(true);
     refresh();
     showMemoCount();
+    schedulePaging();
   },
-  onSelectionUpdate: () => refresh(),
+  onSelectionUpdate: () => {
+    refresh();
+    showPageStatus();
+  },
 });
 
 // ── 리본 채우기 ─────────────────────────────────────────
@@ -405,7 +427,7 @@ function applyPage(p: PageSetup) {
 }
 
 /** 종이 위·아래에 머리말·꼬리말·쪽 번호 미리 보기 (실제 쪽 나눔은 한글·Word 가 한다) */
-function renderHeaderFooter() {
+function renderHeaderFooter(repage = true) {
   const p = state.page;
   const top = $('page-top');
   const bottom = $('page-bottom');
@@ -426,14 +448,91 @@ function renderHeaderFooter() {
   put(bottom, state.footer);
   const pn = state.pageNumber;
   if (pn) {
-    const el = pn.pos.startsWith('top') ? top : bottom;
+    // 쪽 보기: 맨 위 = 1쪽 머리말, 맨 아래 = 마지막 쪽 꼬리말 (가운데 쪽들은 쪽 경계가 그림)
+    const top1 = pn.pos.startsWith('top');
+    const el = top1 ? top : bottom;
+    const n = top1 ? 1 : pageTotal;
     const slot = el.querySelector<HTMLElement>(pn.pos.endsWith('right') ? '.r' : '.c')!;
-    slot.textContent = `${slot.textContent ? `${slot.textContent}  ` : ''}${pn.dash ? '- 1 -' : '1'}`;
+    slot.textContent = `${slot.textContent ? `${slot.textContent}  ` : ''}${pn.dash ? `- ${n} -` : String(n)}`;
   }
   top.hidden = !state.header?.length && !pn?.pos.startsWith('top');
   bottom.hidden = !state.footer?.length && !pn?.pos.startsWith('bottom');
   applyPrintPage({ page: p, header: state.header, footer: state.footer, pageNumber: pn });
+  if (repage) schedulePaging(0, true);
 }
+
+// ── 쪽 보기 (한글 기준 쪽 나눔) ───────────────────────────
+const hfSlots = (ps: Paragraph[] | undefined): [string, string, string] | undefined => {
+  if (!ps?.length) return undefined;
+  const text = ps.map((x) => x.inlines.map((i) => (i.kind === 'text' ? i.text : ' ')).join('')).join(' ');
+  const al = ps[0].style.align;
+  return al === 'center' ? ['', text, ''] : al === 'right' ? ['', '', text] : [text, '', ''];
+};
+function pageLook() {
+  try {
+    return { page: state.page, header: hfSlots(state.header), footer: hfSlots(state.footer), pageNumber: state.pageNumber };
+  } catch {
+    return { page: DEFAULT_PAGE }; // 편집기를 만드는 중 (상태가 아직 없음)
+  }
+}
+/** 한글 기준으로 쪽을 다시 나눈다 (글을 고치면 잠깐 멈춘 뒤) */
+function schedulePaging(delay = 600, redraw = false) {
+  if (redraw && editor) editor.view.dispatch(editor.state.tr.setMeta(pagesKey, {}).setMeta('addToHistory', false));
+  clearTimeout(pagingTimer);
+  pagingTimer = window.setTimeout(() => void runPaging(), delay);
+}
+async function runPaging() {
+  if (!pagesOf(editor.state)?.on) return;
+  const run = ++pagingRun;
+  const pm = editor.state.doc;
+  if (rhwpOk === false) return setPagination(editor, null);
+  try {
+    const mod = await loadRhwpBrowser();
+    rhwpOk = true;
+    if (editor.state.doc !== pm) return schedulePaging(300);
+    const r = await paginate(pm, currentDoc(), mod);
+    if (run !== pagingRun) return;
+    if (editor.state.doc !== pm) return schedulePaging(300); // 그사이 고쳤으면 다시
+    setPagination(editor, r);
+  } catch (e) {
+    console.warn('쪽 나눔 계산기를 쓸 수 없어 화면 높이로 어림합니다', e);
+    rhwpOk = false;
+    setPagination(editor, null);
+  }
+}
+function showPageStatus() {
+  const st = pagesOf(editor.state);
+  const el = $('stat-page');
+  if (!st?.on) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.textContent = `${pageAt(editor.state, editor.state.selection.from)} / ${pageTotal}쪽`;
+  el.title = st.source === 'hangul' ? '한글과 같은 기준으로 나눈 쪽 (rhwp 조판)' : '화면 높이로 어림한 쪽 (데스크톱 앱에서는 한글 기준)';
+}
+const PAGEVIEW_KEY = 'hanword.pageView';
+$('page-view').addEventListener('click', () => {
+  const on = !pagesOf(editor.state)?.on;
+  setPageView(editor, on);
+  $('page-view').classList.toggle('on', on);
+  try {
+    localStorage.setItem(PAGEVIEW_KEY, on ? '1' : '0');
+  } catch {
+    /* 기억 못 해도 됨 */
+  }
+  if (on) schedulePaging(0);
+  showPageStatus();
+});
+try {
+  if (localStorage.getItem(PAGEVIEW_KEY) === '0') {
+    setPageView(editor, false);
+    $('page-view').classList.remove('on');
+  }
+} catch {
+  /* 없음 */
+}
+schedulePaging(0);
 
 /** 머리말 자리(위)·꼬리말 자리(아래)에 찍을 것이 있는가 */
 function hfUse() {
@@ -1018,7 +1117,7 @@ $('app-version').addEventListener('click', () => checkForUpdates(updaterUi, true
 setTimeout(() => void checkForUpdates(updaterUi), 3000);
 
 // 디버그/테스트용
-Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable, currentDoc, autosave, navPane, markDirty, recent: { addRecent, recentFiles, removeRecent } } });
+Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable, currentDoc, autosave, navPane, pages: () => pagesOf(editor.state), markDirty, recent: { addRecent, recentFiles, removeRecent } } });
 
 // ── 명령 창 (Ctrl+K) ─────────────────────────────────────
 function paletteItems(): PaletteItem[] {

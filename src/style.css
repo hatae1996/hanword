@@ -420,6 +420,36 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .hw-palette-empty { padding: 18px; color: var(--ui-muted); text-align: center; font-size: 13px; }
 .hw-palette-foot { padding: 7px 14px; border-top: 1px solid var(--line); color: var(--ui-muted); font-size: 11.5px; }
 
+/* ── 쪽 보기 (src/editor/pages.ts): 한글이 쪽을 나누는 자리에 종이 경계 ── */
+.page.paged { min-height: 0 !important; }
+.page.paged .ProseMirror { min-height: 0; }
+.ProseMirror .hw-pagegap { display: block; position: relative; box-sizing: border-box; text-indent: 0; text-align: left; line-height: normal; font: 10pt var(--font-doc); user-select: none; cursor: default; white-space: normal; }
+.hw-pagegap > span { display: block; box-sizing: border-box; }
+.hw-pagegap .pg-fill { height: 0; }
+.hw-pagegap .pg-foot { height: var(--pg-bottom); padding: 0 var(--pg-mr, 30mm) var(--pg-mb) var(--pg-ml); display: flex; flex-direction: column; justify-content: flex-end; }
+.hw-pagegap .pg-head { height: var(--pg-top); padding: var(--pg-mt) var(--pg-mr, 30mm) 0 var(--pg-ml); }
+.hw-pagegap .pg-hf { display: flex; justify-content: space-between; gap: 8px; color: #555; font: 10pt var(--font-doc); }
+.hw-pagegap .pg-hf > span { flex: 1 1 0; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.hw-pagegap .pg-hf .c { text-align: center; }
+.hw-pagegap .pg-hf .r { text-align: right; }
+.hw-pagegap .pg-foot:not(.empty) .pg-hf { border-top: 1px dashed #d7dde5; padding-top: 2px; }
+.hw-pagegap .pg-head:not(.empty) .pg-hf { border-bottom: 1px dashed #d7dde5; padding-bottom: 2px; }
+.hw-pagegap .pg-foot.empty .pg-hf, .hw-pagegap .pg-head.empty .pg-hf { visibility: hidden; }
+/* 종이 사이 틈: 책상 색 띠 (옆 그림자까지 덮게 좌우로 조금 넓게) */
+.hw-pagegap .pg-gap { height: 10mm; background: var(--desk); position: relative;
+  box-shadow: -24px 0 0 var(--desk), 24px 0 0 var(--desk), inset 0 7px 6px -7px rgba(15, 30, 50, 0.28), inset 0 -7px 6px -7px rgba(15, 30, 50, 0.18); }
+.hw-pagegap .pg-label { position: absolute; right: 0; top: 50%; transform: translateY(-50%); color: var(--ui-muted); font: 11px var(--font-ui); font-variant-numeric: tabular-nums; }
+.ProseMirror .hw-pageend { display: block; height: 0; user-select: none; }
+.ProseMirror table:has(tr.hw-row-pagestart) { overflow: visible; }
+/* 표가 쪽에서 나뉨: 줄 위를 띄우고 (--pgpad = 쪽 경계 높이), 첫 칸에 겹쳐 그린 경계가 칸 선을 덮는다 */
+.ProseMirror tr.hw-row-pagestart > td, .ProseMirror tr.hw-row-pagestart > th { padding-top: calc(var(--pgpad, 0px) + 0.5mm); }
+.ProseMirror .hw-pagegap.in-row { position: absolute; top: -0.5px; z-index: 3; margin: 0; background: var(--paper); }
+.ProseMirror .hw-pagegap.in-row::after { content: ''; position: absolute; left: var(--pg-ml); right: var(--pg-mr); bottom: -1px; border-top: 0.12mm solid #000; }
+.page.paged .ProseMirror .hw-page-break { margin-top: 0 !important; }
+.page.paged .ProseMirror .hw-page-break::before, .page.paged .ProseMirror .hw-page-break::after { content: none; }
+.statusbar .stat-page { color: var(--ui-muted); font: 12px var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.statusbar .stat-page[hidden] { display: none; }
+
 /* ── 인쇄: 종이 내용만 (용지·여백·쪽 번호는 src/ui/print.ts 의 @page) ── */
 @media print {
   html, body { height: auto !important; background: #fff !important; }
@@ -431,6 +461,12 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
   .ProseMirror { min-height: 0 !important; }
   .ProseMirror .hw-page-break { break-before: page; margin-top: 0 !important; }
   .ProseMirror .hw-page-break::before, .ProseMirror .hw-page-break::after { content: none !important; display: none !important; }
+  /* 쪽 보기: 화면과 같은 자리에서 새 쪽 (틈·여백·머리말은 @page 가 그림) */
+  .ProseMirror .hw-pagegap { break-before: page; height: 0 !important; width: auto !important; margin: 0 !important; overflow: hidden; }
+  .ProseMirror .hw-pagegap > span, .ProseMirror .hw-pageend { display: none !important; }
+  .ProseMirror .hw-pagegap.in-row, .ProseMirror .hw-pagegap.in-row::after { display: none !important; }
+  .ProseMirror tr.hw-row-pagestart { break-before: page; }
+  .ProseMirror tr.hw-row-pagestart > td, .ProseMirror tr.hw-row-pagestart > th { padding-top: 0.5mm !important; }
   .ProseMirror .hw-blank, .ProseMirror .hw-find, .ProseMirror .hw-find-current, .ProseMirror .hw-memo { background: none !important; box-shadow: none !important; border-bottom: none !important; }
   .ProseMirror .selectedCell::after, .ProseMirror .column-resize-handle, .ProseMirror-gapcursor { display: none !important; }
   .ProseMirror img.ProseMirror-selectednode { outline: none !important; }
