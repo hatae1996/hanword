@@ -8,6 +8,7 @@
 import type { Editor } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
+import { closeHistory } from '@tiptap/pm/history';
 import { CHAPTER_RE, markerOf } from './gaejo';
 
 export interface OutlineItem {
@@ -76,7 +77,7 @@ export function moveSection(editor: Editor, from: number, to: number): boolean {
   const target = to >= items.length ? state.doc.content.size : items[to].pos;
   if (target >= src.from && target <= src.to) return false;
   const slice = state.doc.slice(src.from, src.to);
-  let tr = state.tr.delete(src.from, src.to);
+  let tr = closeHistory(state.tr).delete(src.from, src.to); // 장 옮기기는 따로 한 번에 되돌림
   const at = tr.mapping.map(target, target > src.from ? -1 : 1);
   tr = tr.insert(at, slice.content);
   tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(at + 1, tr.doc.content.size))));

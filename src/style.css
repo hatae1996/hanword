@@ -386,6 +386,14 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .dp-name { font-weight: 600; font-size: 13px; }
 .dp-badge { font-weight: 500; font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #FDEBD0; color: #7a4b00; vertical-align: 1px; }
 .dp-hint { font-size: 11.5px; color: var(--ui-muted); line-height: 1.45; }
+.dp-sec { font-size: 12.5px; font-weight: 600; margin-top: 4px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.dp-sec span { font-weight: 400; font-size: 11px; color: var(--ui-muted); }
+.dp-cards.mood .dp-paper { padding: 0 0 8px; }
+.dp-cards.mood .dp-paper > :not(.dp-cover) { margin-left: 12px; margin-right: 12px; }
+.dp-cover { display: block; width: 100%; height: auto; margin-bottom: 6px; }
+.dp-cover-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.dp-btn { border: 1px solid var(--line); background: var(--chrome); color: var(--ui-ink); font: 12.5px var(--font-ui); padding: 6px 10px; border-radius: 7px; cursor: pointer; }
+.dp-btn:hover { border-color: var(--accent); }
 
 /* ── 블록 손잡이 · 블록 메뉴 ── */
 .hw-handle { position: absolute; z-index: 4; width: 24px; height: 22px; align-items: center; justify-content: center; }

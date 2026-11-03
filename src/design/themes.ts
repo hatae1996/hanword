@@ -3,6 +3,7 @@
  * 테마가 쓰는 것은 모두 한글·Word 양쪽에서 1:1 로 표현되는 서식뿐이다 (글자 모양, 문단 간격, 칸 배경·테두리).
  */
 import type { Align } from '../model/types';
+import type { DecoSet } from './deco';
 
 export interface TextLook {
   font?: string;
@@ -47,6 +48,8 @@ export interface Theme {
   };
   box: { bg: string; lineColor: string };
   headerFooter: TextLook;
+  /** 감성 테마: 커버·장 아이콘·구분선·상자 아이콘 그림 (강조색은 쓰지 않고 테마 색이 정해져 있음) */
+  deco?: DecoSet;
 }
 
 export interface Accent {
@@ -164,6 +167,52 @@ export const THEMES: Theme[] = [
     headerFooter: { sizePt: 8.5, color: '#A6A6A6' },
   },
 ];
+
+// ── 감성 테마 (노션 꾸미기처럼): 그림 커버 + 장 아이콘 + 구분선 + 파스텔 말풍선 상자 ──
+interface MoodColors {
+  title: string;
+  chapter: string;
+  section: string;
+  soft: string;
+  line: string;
+  headText: string;
+  zebra: string;
+  muted: string;
+}
+function mood(id: DecoSet, name: string, hint: string, c: MoodColors): Theme {
+  return {
+    id,
+    name,
+    hint,
+    deco: id,
+    base: { font: '맑은 고딕', sizePt: 11, lineSpacingPct: 165, spacingPct: 0, color: '#2B2B2B' },
+    roles: {
+      title: p({ sizePt: 24, bold: true, color: c.title, spacingPct: -3 }, { align: 'left', spaceBeforePt: 2, spaceAfterPt: 2, lineSpacingPct: 130 }),
+      subtitle: p({ sizePt: 10, color: c.muted }, { align: 'left', spaceBeforePt: 0, spaceAfterPt: 10 }),
+      chapter: p({ sizePt: 15, bold: true, color: c.chapter }, { spaceBeforePt: 8, spaceAfterPt: 4 }),
+      section: p({ sizePt: 12, bold: true, color: c.section }, { spaceBeforePt: 10, spaceAfterPt: 2 }),
+      item0: p({ sizePt: 11 }, { spaceBeforePt: 5 }),
+      item1: p({ sizePt: 11 }, { spaceBeforePt: 2 }),
+      item2: p({ sizePt: 10.5, color: '#4A4A4A' }),
+      item3: p({ sizePt: 10.5, color: '#4A4A4A' }),
+      note: p({ sizePt: 9.5, color: c.muted }),
+      unit: p({ sizePt: 9, color: c.muted }, { align: 'right', spaceBeforePt: 4 }),
+      caption: p({ sizePt: 9.5, color: c.muted }, { align: 'center' }),
+      body: p({ sizePt: 11 }),
+    },
+    titleBox: { top: 0, bottom: 0, lineColor: '#FFFFFF', bg: c.soft },
+    table: { lines: 'grid', lineColor: c.line, outerMm: 0.12, head: { bg: c.soft, text: { sizePt: 10, bold: true, color: c.headText } }, body: { text: { sizePt: 10 } }, total: { bg: c.soft, bold: true }, zebra: c.zebra },
+    box: { bg: c.soft, lineColor: c.soft },
+    headerFooter: { sizePt: 9, color: c.muted },
+  };
+}
+export const MOOD_THEMES: Theme[] = [
+  mood('sky', '맑은 하늘', '구름 커버 · 파란 파스텔 · 구름 아이콘', { title: '#2467A8', chapter: '#2F7CC4', section: '#2B5A85', soft: '#E3F0FC', line: '#C6DDF3', headText: '#1F4E79', zebra: '#F5F9FE', muted: '#6B7F93' }),
+  mood('night', '밤하늘', '별·달 커버 · 남보라 파스텔 · 별 아이콘', { title: '#3B2F7F', chapter: '#5B49B5', section: '#3F3480', soft: '#ECE8FA', line: '#D4CCF1', headText: '#2E2566', zebra: '#F8F6FD', muted: '#77718F' }),
+  mood('blossom', '봄꽃', '벚꽃 커버 · 분홍 파스텔 · 꽃 아이콘', { title: '#B7375F', chapter: '#C9497A', section: '#8F3253', soft: '#FCE8EF', line: '#F3CAD8', headText: '#8A2648', zebra: '#FFF7FA', muted: '#93707D' }),
+  mood('forest', '숲', '숲·울타리 커버 · 초록 파스텔 · 새싹 아이콘', { title: '#2D6A36', chapter: '#3A8344', section: '#2F5E35', soft: '#E7F3E2', line: '#CBE3C3', headText: '#24502C', zebra: '#F6FBF4', muted: '#6E806F' }),
+];
+THEMES.push(...MOOD_THEMES);
 
 export const themeById = (id: string) => THEMES.find((t) => t.id === id) ?? THEMES[0];
 export const accentById = (id: string) => ACCENTS.find((a) => a.id === id) ?? ACCENTS[0];

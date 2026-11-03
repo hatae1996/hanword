@@ -42,3 +42,24 @@ for (const [name, md] of mdSamples) {
   writeFileSync(join(outDir, `${name}.expected.txt`), plainText(doc.blocks));
   console.log(`✓ ${name}.docx / ${name}.hwpx`);
 }
+
+// 감성 테마 4종 (커버·장 아이콘·구분선·말풍선 상자 그림이 한글·Word 에서 제대로 보이는지)
+{
+  const { applyTheme } = await import('../src/design/apply');
+  const { MOOD_THEMES } = await import('../src/design/themes');
+  const base = markdownToDoc(BUILTIN_TEMPLATES[0].markdown, nodeGenerateJSON, '감성 테마').doc;
+  const para = base.blocks.find((b) => b.type === 'paragraph' && b.inlines.length);
+  void para;
+  const cw = base.page.widthMm - base.page.marginLeftMm - base.page.marginRightMm;
+  const style = { align: 'justify' as const, indentLeftMm: 0, firstLineMm: 0, spaceBeforePt: 0, spaceAfterPt: 0, lineSpacingPct: 160 };
+  const box = { type: 'table' as const, colWidthsMm: [cw], rows: [[{ colspan: 1, rowspan: 1, blocks: [{ type: 'paragraph' as const, role: 'body' as const, style, inlines: [{ kind: 'text' as const, text: '참고: 차수별로 나누어 진행하며, 부서별 일정은 따로 알립니다.' }] }] }]] };
+  const withBox = { ...base, blocks: [...base.blocks.slice(0, 4), box, ...base.blocks.slice(4)] };
+  for (const [i, th] of MOOD_THEMES.entries()) {
+    const name = `E${i + 1}-${th.name.replace(/\s+/g, '')}`;
+    const doc = applyTheme(withBox, th);
+    writeFileSync(join(outDir, `${name}.docx`), await docToDocx(doc));
+    writeFileSync(join(outDir, `${name}.hwpx`), await docToHwpx(doc));
+    writeFileSync(join(outDir, `${name}.expected.txt`), plainText(doc.blocks));
+    console.log(`✓ ${name}.docx / ${name}.hwpx`);
+  }
+}

@@ -19,10 +19,12 @@ import { docToHwpx } from '../src/export/hwpx';
 import { docToDocx } from '../src/export/docx';
 import { readHwpx } from '../src/import/hwpx';
 import { readDocx } from '../src/import/docx';
-import type { Doc } from '../src/model/types';
+import type { Doc, ImageRun, Paragraph } from '../src/model/types';
 import { SAMPLES, SAMPLE_EXTRAS } from './samples';
 import { applyTheme } from '../src/design/apply';
-import { ACCENTS, THEMES } from '../src/design/themes';
+import { decoKind, replaceCover } from '../src/design/deco';
+import { DECO_ASSETS } from '../src/design/decoAssets';
+import { ACCENTS, THEMES, themeById } from '../src/design/themes';
 import { BUILTIN_TEMPLATES } from '../src/ui/templates';
 import { readHwp } from '../src/import/hwp';
 import { loadRhwpNode } from '../src/import/hwpNode';
@@ -103,6 +105,49 @@ for (const [name, json] of Object.entries(SAMPLES)) {
       same(`테마 ${other.name} → ${th.name}: ${name} 바꿔 입히기`, a, applyTheme(applyTheme(d, other, ACCENTS[3]), th, ACCENTS[1]));
     }
   }
+}
+
+// ── 감성 테마 장식: 커버·장 아이콘·구분선·상자 아이콘 ────────────
+{
+  const d0 = markdownToDoc(BUILTIN_TEMPLATES[0].markdown, nodeGenerateJSON).doc;
+  // 상자(1칸 표) 하나를 본문 중간에 넣어 둔다
+  const para = d0.blocks.find((b) => b.type === 'paragraph' && b.inlines.length) as Paragraph;
+  const box: Doc['blocks'][number] = { type: 'table', colWidthsMm: [150], rows: [[{ colspan: 1, rowspan: 1, blocks: [{ ...para, inlines: [{ kind: 'text', text: '참고: 차수별로 나누어 진행합니다' }] }] }]] };
+  const d: Doc = { ...d0, blocks: [...d0.blocks.slice(0, 4), box, ...d0.blocks.slice(4)] };
+  const kinds = (doc: Doc) => {
+    const out: string[] = [];
+    const scan = (ps: Paragraph[]) => ps.forEach((p) => p.inlines.forEach((i) => i.kind === 'image' && decoKind(i) && out.push(decoKind(i)!)));
+    for (const b of doc.blocks) b.type === 'paragraph' ? scan([b]) : b.rows.forEach((r) => r.forEach((c) => scan(c.blocks)));
+    return out;
+  };
+  const count = (ks: string[], pre: string) => ks.filter((k) => k.startsWith(pre)).length;
+  const sky = themeById('sky'), night = themeById('night'), modern = themeById('modern');
+  const a = applyTheme(d, sky);
+  const ka = kinds(a);
+  const chapters = a.blocks.filter((b) => b.type === 'paragraph' && /^\s*[ⅠⅡⅢⅣⅤ]\s*\./.test(b.inlines.map((i) => (i.kind === 'text' ? i.text : '')).join(''))).length;
+  ok(`하늘: 커버 1 · 장 아이콘 ${chapters} · 구분선 ${chapters - 1}`, a.blocks[0].type === 'paragraph' && ka[0] === 'cover:sky' && count(ka, 'cover:') === 1 && count(ka, 'icon:sky') === chapters && count(ka, 'divider:sky') === chapters - 1 && chapters >= 2, ka.join(','));
+  const one = (b: Doc['blocks'][number]) => b.type === 'table' && b.rows.length === 1 && b.rows[0].length === 1;
+  const boxes = a.blocks.filter(one).length - (one(a.blocks[1]) ? 1 : 0);
+  ok(`하늘: 상자(1칸 표) ${boxes}개에 말풍선 아이콘`, boxes >= 1 && count(ka, 'box:sky') === boxes, `${count(ka, 'box:sky')} / ${boxes}`);
+  const h = (await readHwpx(await docToHwpx(a))).doc;
+  ok('하늘: 한글로 저장했다 열어도 장식인 줄 앎', kinds(h).join() === ka.join(), kinds(h).join(','));
+  const x = (await readDocx(await docToDocx(a))).doc;
+  ok('하늘: Word 로 저장했다 열어도 장식인 줄 앎', kinds(x).join() === ka.join(), kinds(x).join(','));
+  const n = applyTheme(h, night);
+  ok('다시 연 문서에 밤하늘 → 장식이 겹치지 않고 바뀜', kinds(n).join() === ka.join().replace(/sky/g, 'night'), kinds(n).join(','));
+  same('하늘 → 밤하늘 = 처음부터 밤하늘', applyTheme(d, night), n);
+  const m = applyTheme(n, modern);
+  ok('밤하늘 → 모던: 장식이 모두 빠짐', kinds(m).length === 0, kinds(m).join(','));
+  same('장식 뺀 결과 = 처음부터 모던', applyTheme(d, modern), m);
+  // 사용자 커버는 테마를 바꿔도 남음
+  const fake: ImageRun = { ...(a.blocks[0] as Paragraph).inlines[0] as ImageRun };
+  const custom: ImageRun = { ...fake, data: Buffer.from(Buffer.from(fake.data, 'base64').toString('latin1').replace('cover:sky', 'cover:custom'), 'latin1').toString('base64') };
+  const c = replaceCover(applyTheme(d, sky), custom);
+  ok('내 커버로 바꿈', kinds(c)[0] === 'cover:custom' && count(kinds(c), 'cover:') === 1, kinds(c).join(','));
+  const c2 = applyTheme(applyTheme(c, night), modern);
+  ok('내 커버는 테마를 바꿔도 남음 (기본 테마에서도)', kinds(c2).join() === 'cover:custom', kinds(c2).join(','));
+  ok('커버 빼기', kinds(replaceCover(c2, null)).length === 0);
+  ok('감성 테마 장식 그림은 모두 그림 형식 (한글·Word 공통)', Object.values(DECO_ASSETS).every((x) => x.mime === 'image/png' || x.mime === 'image/jpeg'));
 }
 
 // ── AI 가 쓴 마크다운 ─────────────────────────────────────
