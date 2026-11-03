@@ -1,7 +1,7 @@
 import './style.css';
 import { Editor } from '@tiptap/core';
 import { ALL_FONTS, DEFAULT_FONT, DEFAULT_PAGE, DEFAULT_SIZE_PT, HANCOM_ONLY_FONTS, keepHfOffEdge } from './model/defaults';
-import type { Doc, PageNumber, PageSetup, Paragraph } from './model/types';
+import type { PageNumber, PageSetup, Paragraph } from './model/types';
 import { tiptapToDoc } from './model/fromTiptap';
 import { docToTiptap } from './model/toTiptap';
 import { docToDocx } from './export/docx';
@@ -43,7 +43,6 @@ import { BlockHandles } from './editor/blocks';
 import { openBlockMenu } from './ui/blockMenu';
 import { Pages, pageAt, pagesKey, pagesOf, setPageView, setPagination } from './editor/pages';
 import { paginate } from './layout/pagination';
-import { hasCover, makeCustomCover, replaceCover } from './design/deco';
 import { applyView, closeViewPopover, isFocusMode, loadView, openViewPopover, setFocusMode, viewCommands } from './ui/viewSettings';
 
 applyView(loadView()); // 화면 모양 (어두운 화면·종이 색·메뉴 글자) — 그리기 전에
@@ -605,8 +604,9 @@ let design: { themeId?: string; accentId: string } = (() => {
   }
 })();
 /** 테마를 문서에 입힌다 — 편집 한 번으로 (Ctrl+Z 로 되돌림) */
-/** 문서 전체를 바꾼 Doc 으로 갈아 끼운다 (Ctrl+Z 한 번으로 되돌림) */
-function replaceWholeDoc(themed: Doc) {
+function applyDesign(themeId: string, accentId: string) {
+  const th = themeById(themeId);
+  const themed = applyTheme(currentDoc(), th, accentById(accentId));
   const node = editor.schema.nodeFromJSON(docToTiptap(themed) as any);
   const at = editor.state.selection.from;
   const tr = closeHistory(editor.state.tr).replaceWith(0, editor.state.doc.content.size, node.content);
@@ -615,10 +615,6 @@ function replaceWholeDoc(themed: Doc) {
   state.header = themed.header;
   state.footer = themed.footer;
   renderHeaderFooter();
-}
-function applyDesign(themeId: string, accentId: string) {
-  const th = themeById(themeId);
-  replaceWholeDoc(applyTheme(currentDoc(), th, accentById(accentId)));
   design = { themeId, accentId };
   try {
     localStorage.setItem(DESIGN_KEY, JSON.stringify({ accentId }));
@@ -628,32 +624,7 @@ function applyDesign(themeId: string, accentId: string) {
   markDirty(true);
   toast(`디자인: ${th.name} 테마${th.hancomFonts ? ' (휴먼명조·HY헤드라인M — Word 만 있는 PC 에서는 비슷한 글꼴로 보임)' : ''} · Ctrl+Z 로 되돌리기`);
 }
-const designPanel = setupDesignPanel($('designpane'), {
-  apply: applyDesign,
-  current: () => design,
-  hasCover: () => hasCover(currentDoc()),
-  // 커버를 내 그림으로: 5:1 로 잘라 표식을 넣은 그림으로 (테마를 바꿔도 남음)
-  pickCover: async () => {
-    const files = await pickImages(false);
-    if (!files.length) return;
-    const f = files[0];
-    try {
-      const p = state.page;
-      const cover = await makeCustomCover(new Blob([f.bytes as BlobPart]), p.widthMm - p.marginLeftMm - p.marginRightMm);
-      replaceWholeDoc(replaceCover(currentDoc(), cover));
-      markDirty(true);
-      designPanel.refresh();
-      toast(`커버를 ${f.name} 로 바꿨습니다 · 테마를 바꿔도 남습니다 · Ctrl+Z 로 되돌리기`);
-    } catch (e) {
-      toast(`그림을 읽지 못했습니다: ${String(e)}`, true);
-    }
-  },
-  removeCover: () => {
-    replaceWholeDoc(replaceCover(currentDoc(), null));
-    markDirty(true);
-    toast('커버를 뺐습니다 · Ctrl+Z 로 되돌리기');
-  },
-});
+const designPanel = setupDesignPanel($('designpane'), { apply: applyDesign, current: () => design });
 $('design').addEventListener('click', () => designPanel.toggle());
 
 function currentDoc() {
@@ -1170,7 +1141,7 @@ $('app-version').addEventListener('click', () => checkForUpdates(updaterUi, true
 setTimeout(() => void checkForUpdates(updaterUi), 3000);
 
 // 디버그/테스트용
-Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable, currentDoc, autosave, navPane, pages: () => pagesOf(editor.state), saveBytes: (_d: unknown, f: Format) => encode(f), markDirty, recent: { addRecent, recentFiles, removeRecent } } });
+Object.assign(window as any, { hanword: { editor, tiptapToDoc, loadFile, state, sumTable, currentDoc, autosave, navPane, pages: () => pagesOf(editor.state), markDirty, recent: { addRecent, recentFiles, removeRecent } } });
 
 // ── 명령 창 (Ctrl+K) ─────────────────────────────────────
 function paletteItems(): PaletteItem[] {

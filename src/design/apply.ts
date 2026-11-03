@@ -7,7 +7,6 @@ import type { Block, BorderLine, CellBorders, Doc, Inline, Paragraph, Table, Tab
 import { placeCells } from '../model/table';
 import { NO_BORDER, type Side } from '../model/borders';
 import { ACCENTS, THEMES, type Accent, type ParaLook, type TextLook, type Theme } from './themes';
-import { addDeco, stripDeco } from './deco';
 
 export type Role = keyof Theme['roles'] | 'empty';
 export type TableKind = 'titleBox' | 'box' | 'photo' | 'steps' | 'form' | 'data';
@@ -217,19 +216,14 @@ function styleTable(t: Table, kind: TableKind, th: Theme, a: Accent): Table {
 }
 
 /** 문서 전체에 테마를 입힌다 (새 Doc 을 돌려줌) */
-export function applyTheme(input: Doc, th: Theme, accent: Accent = ACCENTS[0]): Doc {
-  // 먼저 이전 테마 장식(커버·아이콘·구분선)을 걷어 낸다 — 장식이 역할 판별을 흐리지 않게
-  const { doc, customCover } = stripDeco(input);
+export function applyTheme(doc: Doc, th: Theme, accent: Accent = ACCENTS[0]): Doc {
   let seenContent = false;
   let afterTitle = false;
-  const chapters: number[] = [];
-  const boxes: number[] = [];
   const blocks: Block[] = doc.blocks.map((b, i) => {
     if (b.type === 'table') {
       const kind = tableKind(b, !seenContent);
       if (kind === 'titleBox') afterTitle = true;
       else afterTitle = false;
-      if (kind === 'box') boxes.push(i);
       seenContent = true;
       return styleTable(b, kind, th, accent);
     }
@@ -240,7 +234,7 @@ export function applyTheme(input: Doc, th: Theme, accent: Accent = ACCENTS[0]): 
     }
     seenContent = true;
     afterTitle = role === 'title';
-    if (role === 'chapter') chapters.push(i);
+    void i;
     const look = th.roles[role];
     // 문단 정렬: 제목·날짜·단위·설명은 테마대로, 본문·항목은 원래 정렬(양쪽/왼쪽)을 지킨다
     const keepAlign = !['title', 'subtitle', 'unit', 'caption'].includes(role);
@@ -248,8 +242,7 @@ export function applyTheme(input: Doc, th: Theme, accent: Accent = ACCENTS[0]): 
     return lookPara(b, th.base, look, accent, { keepAlign, controlBold });
   });
   const hf = (ps?: Paragraph[]) => ps?.map((p) => lookPara(p, th.base, { text: th.headerFooter }, accent, { keepAlign: true }));
-  const styled = { ...doc, blocks, header: hf(doc.header), footer: hf(doc.footer) };
-  return addDeco(styled, th.deco, { chapters, boxes, chapterPt: th.roles.chapter.text.sizePt ?? th.base.sizePt, boxPt: th.roles.body.text.sizePt ?? th.base.sizePt }, customCover);
+  return { ...doc, blocks, header: hf(doc.header), footer: hf(doc.footer) };
 }
 
 /** 미리보기·시험용: 문서의 역할 목록 */
