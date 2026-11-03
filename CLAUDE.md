@@ -42,8 +42,8 @@ npm run release -- X.Y.Z "바뀐 점 한 줄"   # 버전 올리고 CHANGELOG + �
 # src-tauri/Cargo.lock 의 hanword 버전도 맞춘 뒤 커밋에 넣고 push → CI 확인 → 사용자에게 Run workflow 링크
 ```
 
-## 지금까지 (2026-11 기준 1.6.0)
+## 지금까지 (2026-11 기준 1.7.0)
 0.8 개조식·/부품 → 0.9 모양 복사·표 계산 → 0.10 자동 저장·탐색 창 → 0.11 쪽 번호·머리말 → 0.12 그림·사진대지 → 0.13 양식 →
-1.0 구형 .hwp 열기·검증 꾸러미 → 1.0.1 인쇄 → 1.1 문장 다듬기 → 1.2 AI 다듬기 → 1.3 메모 → 1.4 문서 테마 → 1.5 블록 편집·Ctrl+K → 1.6 쪽 보기(한글 기준 쪽 나눔, `src/layout/pagination.ts`·`src/editor/pages.ts`).
+1.0 구형 .hwp 열기·검증 꾸러미 → 1.0.1 인쇄 → 1.1 문장 다듬기 → 1.2 AI 다듬기 → 1.3 메모 → 1.4 문서 테마 → 1.5 블록 편집·Ctrl+K → 1.6 쪽 보기(한글 기준 쪽 나눔, `src/layout/pagination.ts`·`src/editor/pages.ts`) → 1.7 화면 모양·집중 모드(`src/ui/viewSettings.ts`), 손잡이 잡기 쉽게.
 로드맵 문서: https://claude.ai/artifact/CLZc3rcr1NFZBdZkmmrojw · 체험판: https://claude.ai/artifact/Dh8GFPXarvNHfMdJ7NPYUD
 남은 것: 변경 추적, 무손실 저장(지원 안 하는 요소 원본 보관), 코드 서명.

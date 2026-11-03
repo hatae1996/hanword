@@ -247,15 +247,6 @@ export const BlockHandles = Extension.create<BlockOptions>({
             return DecorationSet.create(state.doc, decos);
           },
           handleDOMEvents: {
-            mousemove(view, e) {
-              // 끄는 중·글자를 드래그해 고르는 중에는 손잡이를 옮기지 않는다
-              if (dragging || e.buttons || !editor.isEditable) return false;
-              const pos = view.posAtCoords({ left: Math.max(view.dom.getBoundingClientRect().left + 4, e.clientX), top: e.clientY });
-              if (!pos) return false;
-              const i = topIndexAt(view.state.doc, pos.inside >= 0 ? pos.inside : pos.pos);
-              if (i !== current) place(view, i);
-              return false;
-            },
             dragover(view, e) {
               if (!dragging) return false;
               e.preventDefault();
@@ -320,13 +311,42 @@ export const BlockHandles = Extension.create<BlockOptions>({
             if (line) line.style.display = 'none';
             setHighlight(view, null);
           });
+          // 손잡이는 글 왼쪽 여백에 있어서, 글에서 손잡이로 가는 길(여백)에서도 사라지면 안 된다.
+          // → 종이 전체에서 마우스를 보고, 글 영역 + 왼쪽 여백 64px 안이면 그 줄의 손잡이를 띄운다.
+          //   밖으로 나가도 바로 지우지 않고 잠깐 기다린다 (손이 살짝 빗나가도 잡을 수 있게)
+          let hideTimer = 0;
+          const hideSoon = () => {
+            if (!hideTimer) hideTimer = window.setTimeout(() => ((hideTimer = 0), hide()), 400);
+          };
+          const keep = () => {
+            clearTimeout(hideTimer);
+            hideTimer = 0;
+          };
+          const move = (e: MouseEvent) => {
+            // 끄는 중·글자를 드래그해 고르는 중에는 손잡이를 옮기지 않는다
+            if (dragging || e.buttons || !editor.isEditable) return;
+            if (handle!.contains(e.target as Node)) return keep();
+            const d = view.dom.getBoundingClientRect();
+            const inZone = e.clientX >= d.left - 64 && e.clientX <= d.right + 8 && e.clientY >= d.top && e.clientY <= d.bottom;
+            if (!inZone) return hideSoon();
+            keep();
+            // 손잡이와 같은 높이(손잡이 쪽 여백)에서는 그 블록을 그대로 둔다
+            if (current >= 0 && e.clientX < d.left) {
+              const hr = handle!.getBoundingClientRect();
+              if (e.clientY >= hr.top - 6 && e.clientY <= hr.bottom + 6) return;
+            }
+            const pos = view.posAtCoords({ left: Math.max(d.left + 4, Math.min(d.right - 4, e.clientX)), top: e.clientY });
+            if (!pos) return;
+            const i = topIndexAt(view.state.doc, pos.inside >= 0 ? pos.inside : pos.pos);
+            if (i !== current) place(view, i);
+          };
           const leave = (e: MouseEvent) => {
             const to = e.relatedTarget as Node | null;
-            if (to && (handle!.contains(to) || view.dom.contains(to))) return;
-            hide();
+            if (to && handle!.contains(to)) return;
+            hideSoon();
           };
-          view.dom.addEventListener('mouseleave', leave);
-          handle.addEventListener('mouseleave', leave);
+          box.addEventListener('mousemove', move);
+          box.addEventListener('mouseleave', leave);
           return {
             update(v, prev) {
               if (!v.state.doc.eq(prev.doc) && current >= 0) {
@@ -335,7 +355,9 @@ export const BlockHandles = Extension.create<BlockOptions>({
               }
             },
             destroy() {
-              view.dom.removeEventListener('mouseleave', leave);
+              box.removeEventListener('mousemove', move);
+              box.removeEventListener('mouseleave', leave);
+              clearTimeout(hideTimer);
               handle?.remove();
               line?.remove();
             },

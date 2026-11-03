@@ -43,6 +43,9 @@ import { BlockHandles } from './editor/blocks';
 import { openBlockMenu } from './ui/blockMenu';
 import { Pages, pageAt, pagesKey, pagesOf, setPageView, setPagination } from './editor/pages';
 import { paginate } from './layout/pagination';
+import { applyView, closeViewPopover, isFocusMode, loadView, openViewPopover, setFocusMode, viewCommands } from './ui/viewSettings';
+
+applyView(loadView()); // 화면 모양 (어두운 화면·종이 색·메뉴 글자) — 그리기 전에
 import { openCommandPalette, type PaletteItem } from './ui/commandPalette';
 import { THEMES } from './design/themes';
 import { applyTheme } from './design/apply';
@@ -512,6 +515,7 @@ function showPageStatus() {
   el.title = st.source === 'hangul' ? '한글과 같은 기준으로 나눈 쪽 (rhwp 조판)' : '화면 높이로 어림한 쪽 (데스크톱 앱에서는 한글 기준)';
 }
 const PAGEVIEW_KEY = 'hanword.pageView';
+$('view-btn').addEventListener('click', () => openViewPopover($('view-btn'), toast));
 $('page-view').addEventListener('click', () => {
   const on = !pagesOf(editor.state)?.on;
   setPageView(editor, on);
@@ -853,6 +857,17 @@ window.addEventListener('keydown', (e) => {
     formatPaste(editor, toast);
     return;
   }
+  // 집중 모드: F11 켜고 끄기, Esc 로 끝 (대화상자·명령 창이 열려 있으면 그쪽이 먼저)
+  if (e.key === 'F11' && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+    e.preventDefault();
+    closeViewPopover();
+    setFocusMode(!isFocusMode(), toast);
+    return;
+  }
+  if (e.key === 'Escape' && isFocusMode() && !document.querySelector('dialog[open], .hw-palette, .hw-blockmenu, .hw-slash:not([hidden])')) {
+    setFocusMode(false);
+    return;
+  }
   if (e.key === 'Escape' && !document.querySelector('dialog[open]') && clearFormatCopy()) {
     toast('모양 복사를 끝냈습니다');
     return;
@@ -1164,6 +1179,8 @@ function paletteItems(): PaletteItem[] {
     ['block-up', '블록 위로 옮기기 (아래 항목과 함께)', 'Alt+Shift+↑', () => editor.commands.keyboardShortcut('Alt-Shift-ArrowUp')],
     ['block-down', '블록 아래로 옮기기 (아래 항목과 함께)', 'Alt+Shift+↓', () => editor.commands.keyboardShortcut('Alt-Shift-ArrowDown')],
   ];
+  for (const c of viewCommands(toast)) more.push([`view:${c.id}`, c.label, c.keys, c.run, c.keywords]);
+  more.push(['view-panel', '화면 모양 (어두운 화면·종이 색·메뉴 글자)', undefined, () => openViewPopover($('view-btn'), toast), '다크 모드 테마 꾸미기 설정']);
   for (const [id, label, keys, run, kw] of more) items.push({ id: `more:${id}`, label, group: '보기·이동', keys, keywords: kw, run: () => (editor.commands.focus(), run()) });
   // 테마
   for (const t of THEMES) items.push({ id: `theme:${t.id}`, label: `${t.name} 테마로 바꾸기`, group: '디자인', hint: t.hint.slice(0, 40), keywords: '디자인 테마', run: () => applyDesign(t.id, design.accentId) });

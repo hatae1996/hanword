@@ -450,6 +450,48 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
 .statusbar .stat-page { color: var(--ui-muted); font: 12px var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .statusbar .stat-page[hidden] { display: none; }
 
+/* ── 화면 모양 (src/ui/viewSettings.ts) — 화면에서만, 인쇄·파일은 흰 종이 그대로 ── */
+:root[data-paper='cream'] { --paper: #fbf6e9; }
+:root[data-paper='green'] { --paper: #eef5e9; }
+/* 어두운 종이: 종이는 어둡게, 글은 뒤집어 밝게 (색은 그대로 보이게 hue-rotate). 사진은 다시 뒤집어 원래대로 */
+:root[data-paper='dark'] { --paper: #1f2329; --paper-in: #e0dcd6; --pg-band: #1b1712; }
+:root[data-paper='dark'][data-theme='dark'] { --pg-band: #ede9e4; }
+@media (prefers-color-scheme: dark) { :root[data-paper='dark']:not([data-theme='light']) { --pg-band: #ede9e4; } }
+:root[data-paper='dark'] .page .ProseMirror, :root[data-paper='dark'] .page .page-hf { filter: invert(1) hue-rotate(180deg); }
+:root[data-paper='dark'] .page .ProseMirror img { filter: invert(1) hue-rotate(180deg); }
+:root[data-paper='dark'] .page .hw-pagegap .pg-gap { background: var(--pg-band); box-shadow: -24px 0 0 var(--pg-band), 24px 0 0 var(--pg-band); }
+:root[data-paper='dark'] .page .hw-pagegap.in-row { background: var(--paper-in); }
+
+/* 메뉴 글자 크기 */
+:root[data-ui-size='large'] :is(.topbar, .ribbon, .statusbar, .navpane, .designpane, .update-bar, .hw-palette, .vw-pop) { zoom: 1.12; }
+:root[data-ui-size='xlarge'] :is(.topbar, .ribbon, .statusbar, .navpane, .designpane, .update-bar, .hw-palette, .vw-pop) { zoom: 1.2; }
+
+/* 집중 모드: 종이만 */
+:root[data-focus='1'] :is(.topbar, .ribbon, .statusbar, .update-bar, .navpane, .designpane, .ruler) { display: none !important; }
+:root[data-focus='1'] .desk { padding-top: 40px; }
+.focus-exit { position: fixed; top: 12px; right: 16px; z-index: 60; border: 1px solid var(--line); background: var(--chrome); color: var(--ui-ink); font: 12.5px var(--font-ui);
+  padding: 6px 12px; border-radius: 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(15, 25, 40, 0.14); opacity: 0; transition: opacity 0.25s; }
+.focus-exit.show, .focus-exit:hover, .focus-exit:focus-visible { opacity: 1; }
+.focus-exit[hidden] { display: none; }
+
+/* 화면 모양 창 */
+.vw-pop { position: fixed; z-index: 55; width: 330px; box-sizing: border-box; padding: 12px 14px; background: var(--chrome); color: var(--ui-ink); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: 0 10px 34px rgba(15, 25, 40, 0.2); font: 13px var(--font-ui); display: grid; gap: 10px; }
+.vw-head { display: flex; align-items: baseline; justify-content: space-between; }
+.vw-head span { color: var(--ui-muted); font-size: 11.5px; }
+.vw-row { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 8px; }
+.vw-row > label { color: var(--ui-muted); font-size: 12px; }
+.vw-seg { display: flex; background: var(--chrome-2); border-radius: 7px; padding: 2px; gap: 2px; }
+.vw-seg button { flex: 1 1 0; border: 0; background: transparent; color: var(--ui-ink); font: 12.5px var(--font-ui); padding: 5px 4px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.vw-seg button.on { background: var(--chrome); box-shadow: 0 1px 2px rgba(15, 25, 40, 0.18); font-weight: 600; }
+.vw-swatches { display: flex; gap: 8px; }
+.vw-swatches button { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--chrome); background: var(--sw); outline: 1px solid var(--line); cursor: pointer; padding: 0; }
+.vw-swatches button.on { outline: 2px solid var(--sw); }
+.vw-foot { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.vw-foot button { border: 1px solid var(--line); background: transparent; color: var(--ui-ink); font: 12.5px var(--font-ui); padding: 5px 10px; border-radius: 7px; cursor: pointer; }
+.vw-foot button:hover { background: var(--chrome-2); }
+.vw-foot kbd { font: 11px var(--font-ui); color: var(--ui-muted); margin-left: 4px; }
+
 /* ── 인쇄: 종이 내용만 (용지·여백·쪽 번호는 src/ui/print.ts 의 @page) ── */
 @media print {
   html, body { height: auto !important; background: #fff !important; }
@@ -457,6 +499,9 @@ body { margin: 0; background: var(--desk); color: var(--ui-ink); font-family: va
   .topbar, .ribbon, .update-bar, .navpane, .designpane, .findbar, .ruler, .statusbar, .page-hf, .hw-slash, .hw-handle, .hw-drop-line, .hw-blockmenu, dialog { display: none !important; }
   .ProseMirror .hw-block-hl { background: none !important; box-shadow: none !important; }
   .app, .workspace, .desk { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; background: none !important; }
+  :root { --paper: #ffffff !important; }
+  .page .ProseMirror, .page .page-hf, .page .ProseMirror img { filter: none !important; }
+  .focus-exit, .vw-pop { display: none !important; }
   .page { width: auto !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; zoom: 1 !important; background: none !important; }
   .ProseMirror { min-height: 0 !important; }
   .ProseMirror .hw-page-break { break-before: page; margin-top: 0 !important; }
