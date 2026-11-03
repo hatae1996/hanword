@@ -20,6 +20,26 @@ export function setupNavPane(editor: Editor, els: { pane: HTMLElement; toggle: H
   let tab: 'outline' | 'results' = 'outline';
   let items: OutlineItem[] = [];
   let dragFrom = -1;
+  let dropTo = -1;
+  let press: { i: number; x: number; y: number; id: number } | null = null;
+  let suppressClick = false;
+  /** 마우스 높이 → 그 앞에 넣을 목차 번호 (맨 끝 = items.length) */
+  const dropIndexAt = (y: number) => {
+    const els = [...outlineBody.querySelectorAll<HTMLElement>('.nav-item')];
+    for (let k = 0; k < els.length; k++) {
+      const r = els[k].getBoundingClientRect();
+      if (y < r.top + r.height / 2) return k;
+    }
+    return els.length;
+  };
+  const markDrop = (k: number) => {
+    dropTo = k;
+    const els = [...outlineBody.querySelectorAll<HTMLElement>('.nav-item')];
+    els.forEach((el, j) => {
+      el.classList.toggle('drop', j === k);
+      el.classList.toggle('drop-end', k === els.length && j === els.length - 1);
+    });
+  };
 
   const setTab = (t: typeof tab) => {
     tab = t;
@@ -48,39 +68,52 @@ export function setupNavPane(editor: Editor, els: { pane: HTMLElement; toggle: H
       b.className = `nav-item lv${it.level} ${it.kind}${i === cur ? ' on' : ''}`;
       b.textContent = it.text.length > 60 ? `${it.text.slice(0, 60)}…` : it.text;
       b.title = it.kind === 'item' ? it.text : `${it.text}\n끌어서 장 순서를 바꿀 수 있습니다`;
-      b.draggable = true;
-      b.addEventListener('click', () => goToOutline(editor, it));
-      b.addEventListener('dragstart', (e) => {
-        dragFrom = i;
-        e.dataTransfer?.setData('text/plain', String(i));
-        b.classList.add('dragging');
+      b.dataset.i = String(i);
+      // 끌어서 장 순서 바꾸기: 마우스를 직접 따라감 (데스크톱 앱은 HTML 끌어다 놓기를 파일 열기에 씀)
+      b.addEventListener('click', (e) => {
+        if (suppressClick) {
+          suppressClick = false;
+          e.preventDefault();
+          return;
+        }
+        goToOutline(editor, it);
       });
-      b.addEventListener('dragend', () => b.classList.remove('dragging'));
-      b.addEventListener('dragover', (e) => {
-        if (dragFrom < 0) return;
-        e.preventDefault();
-        b.classList.add('drop');
+      b.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        press = { i, x: e.clientX, y: e.clientY, id: e.pointerId };
+        b.setPointerCapture(e.pointerId);
       });
-      b.addEventListener('dragleave', () => b.classList.remove('drop'));
-      b.addEventListener('drop', (e) => {
-        e.preventDefault();
-        b.classList.remove('drop');
-        if (dragFrom >= 0 && dragFrom !== i) moveSection(editor, dragFrom, i);
-        dragFrom = -1;
+      b.addEventListener('pointermove', (e) => {
+        if (!press || press.id !== e.pointerId) return;
+        if (dragFrom < 0) {
+          if (Math.abs(e.clientY - press.y) < 5) return;
+          dragFrom = press.i;
+          b.classList.add('dragging');
+          outlineBody.closest('.navpane')?.classList.add('nav-dragging');
+        }
+        markDrop(dropIndexAt(e.clientY));
       });
+      const finish = (drop: boolean) => {
+        if (dragFrom >= 0) {
+          suppressClick = true;
+          setTimeout(() => (suppressClick = false), 0);
+          const to = dropTo;
+          const from = dragFrom;
+          dragFrom = -1;
+          b.classList.remove('dragging');
+          outlineBody.closest('.navpane')?.classList.remove('nav-dragging');
+          markDrop(-1);
+          if (drop && to >= 0 && to !== from && to !== from + 1) moveSection(editor, from, to);
+        }
+        press = null;
+      };
+      b.addEventListener('pointerup', () => finish(true));
+      b.addEventListener('pointercancel', () => finish(false));
       outlineBody.append(b);
     });
     // 맨 끝으로 옮기는 자리
     const tail = document.createElement('div');
     tail.className = 'nav-tail';
-    tail.addEventListener('dragover', (e) => {
-      if (dragFrom >= 0) e.preventDefault();
-    });
-    tail.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (dragFrom >= 0) moveSection(editor, dragFrom, items.length);
-      dragFrom = -1;
-    });
     outlineBody.append(tail);
   }
 

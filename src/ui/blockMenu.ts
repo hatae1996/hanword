@@ -6,10 +6,13 @@ import { TextSelection } from '@tiptap/pm/state';
 import { deleteGroup, duplicateGroup, moveGroupBy, turnInto, type Group, type TurnInto } from '../editor/blocks';
 
 let open: HTMLElement | null = null;
+let offOutside: (() => void) | null = null;
 
 export function closeBlockMenu() {
   open?.remove();
   open = null;
+  offOutside?.(); // 바깥 누름 감시도 같이 끈다 (남아 있으면 다음 메뉴를 바로 닫아 버림)
+  offOutside = null;
 }
 
 export function openBlockMenu(editor: Editor, g: Group, anchor: HTMLElement) {
@@ -76,13 +79,15 @@ export function openBlockMenu(editor: Editor, g: Group, anchor: HTMLElement) {
   menu.style.top = `${r.bottom + 4 + mh > innerHeight ? Math.max(8, r.top - mh - 4) : r.bottom + 4}px`;
   open = menu;
   (menu.querySelector('.hw-bm-item') as HTMLElement)?.focus();
-  const onDown = (e: MouseEvent) => {
-    if (!menu.contains(e.target as Node)) {
-      closeBlockMenu();
-      document.removeEventListener('mousedown', onDown, true);
-    }
+  // 바깥을 누르면 닫기 (pointerdown: 손잡이처럼 mousedown 을 막는 곳을 눌러도 닫히게)
+  const onDown = (e: Event) => {
+    if (open === menu && !menu.contains(e.target as Node)) closeBlockMenu();
   };
-  setTimeout(() => document.addEventListener('mousedown', onDown, true));
+  const timer = setTimeout(() => document.addEventListener('pointerdown', onDown, true));
+  offOutside = () => {
+    clearTimeout(timer);
+    document.removeEventListener('pointerdown', onDown, true);
+  };
   menu.addEventListener('keydown', (e) => {
     const items = [...menu.querySelectorAll<HTMLButtonElement>('button')];
     const k = items.indexOf(document.activeElement as HTMLButtonElement);

@@ -191,13 +191,13 @@ export function openViewPopover(anchor: HTMLElement, toast?: (m: string) => void
   const r = anchor.getBoundingClientRect();
   pop.style.right = `${Math.max(8, innerWidth - r.right)}px`;
   pop.style.bottom = `${Math.max(8, innerHeight - r.top + 6)}px`;
-  const outside = (e: MouseEvent) => {
+  const outside = (e: Event) => {
     if (pop && !pop.contains(e.target as Node) && !anchor.contains(e.target as Node)) {
       closeViewPopover();
-      document.removeEventListener('mousedown', outside, true);
+      document.removeEventListener('pointerdown', outside, true);
     }
   };
-  setTimeout(() => document.addEventListener('mousedown', outside, true));
+  setTimeout(() => document.addEventListener('pointerdown', outside, true));
 }
 
 /** 명령 창(Ctrl+K)에 넣을 항목 */

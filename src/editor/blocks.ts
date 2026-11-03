@@ -246,39 +246,13 @@ export const BlockHandles = Extension.create<BlockOptions>({
             });
             return DecorationSet.create(state.doc, decos);
           },
-          handleDOMEvents: {
-            dragover(view, e) {
-              if (!dragging) return false;
-              e.preventDefault();
-              if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-              const b = boundaryAt(view, e.clientY);
-              dropAt = b.at;
-              if (line) {
-                const inside = b.at > dragging.start && b.at < dragging.end;
-                line.style.display = inside ? 'none' : 'block';
-                line.style.top = `${b.top}px`;
-              }
-              return true;
-            },
-            drop(view, e) {
-              if (!dragging) return false;
-              e.preventDefault();
-              const g = dragging;
-              dragging = null;
-              if (line) line.style.display = 'none';
-              setHighlight(view, null);
-              if (dropAt >= 0) moveGroupTo(editor, g, dropAt);
-              view.focus(); // 바로 Ctrl+Z 로 되돌릴 수 있게
-              return true;
-            },
-          },
         },
         view(view) {
           const box = host(view);
           handle = document.createElement('div');
           handle.className = 'hw-handle';
           handle.setAttribute('aria-hidden', 'true');
-          handle.innerHTML = '<span class="grip" draggable="true" title="끌어서 옮기기 · 눌러서 메뉴 (아래 항목·내용과 함께 움직입니다)">⋮⋮</span>';
+          handle.innerHTML = '<span class="grip" title=""끌어서 옮기기 · 눌러서 메뉴 (아래 항목·내용과 함께 움직입니다)">⋮⋮</span>';
           handle.style.display = 'none';
           line = document.createElement('div');
           line.className = 'hw-drop-line';
@@ -292,25 +266,122 @@ export const BlockHandles = Extension.create<BlockOptions>({
             }
           });
           grip.addEventListener('mouseleave', () => !dragging && setHighlight(view, null));
-          grip.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (current < 0) return;
-            opts.onMenu(groupAt(view.state.doc, current), grip);
-          });
-          grip.addEventListener('dragstart', (e) => {
+          // ── 끌어 옮기기: 마우스를 직접 따라간다 (데스크톱 앱은 HTML 끌어다 놓기를 파일 열기에 쓰므로) ──
+          //   누르고 4px 넘게 움직이면 끌기 시작 → 블록 미리보기가 마우스를 따라오고, 놓을 자리에 선.
+          //   화면 위·아래 끝에 가면 저절로 스크롤, Esc 로 취소. 움직이지 않고 떼면 = 누름 → 블록 메뉴
+          let press: { x: number; y: number; id: number } | null = null;
+          let ghost: HTMLElement | null = null;
+          let lastY = 0;
+          let scrollRaf = 0;
+          const scroller = () => (box.closest('.desk') as HTMLElement | null) ?? document.scrollingElement as HTMLElement;
+          const showLine = (clientY: number) => {
+            if (!dragging || !line) return;
+            const b = boundaryAt(view, clientY);
+            dropAt = b.at;
+            const inside = b.at >= dragging.start && b.at <= dragging.end;
+            line.style.display = inside ? 'none' : 'block';
+            line.style.top = `${b.top}px`;
+            if (inside) dropAt = -1;
+          };
+          const autoScroll = () => {
+            scrollRaf = 0;
+            if (!dragging) return;
+            const sc = scroller();
+            const r = sc.getBoundingClientRect();
+            const edge = 56;
+            const v = lastY < r.top + edge ? -(r.top + edge - lastY) : lastY > r.bottom - edge ? lastY - (r.bottom - edge) : 0;
+            if (v) {
+              sc.scrollTop += Math.max(-24, Math.min(24, v / 2));
+              showLine(lastY);
+            }
+            scrollRaf = requestAnimationFrame(autoScroll);
+          };
+          const startDrag = (e: PointerEvent) => {
             if (current < 0) return;
             dragging = groupAt(view.state.doc, current);
             setHighlight(view, { from: dragging.from, to: dragging.to });
-            e.dataTransfer?.setData('text/plain', view.state.doc.textBetween(dragging.from, dragging.to, '\n'));
-            if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-            const el = view.nodeDOM(dragging.from) as HTMLElement | null;
-            if (el && e.dataTransfer) e.dataTransfer.setDragImage(el, 10, 10);
-          });
-          grip.addEventListener('dragend', () => {
+            box.classList.add('hw-dragging');
+            document.body.classList.add('hw-dragging-body');
+            // 미리보기: 묶음 첫 블록 모양을 작게 (여러 블록이면 "외 n개")
+            ghost = document.createElement('div');
+            ghost.className = 'hw-drag-ghost';
+            const first = view.nodeDOM(dragging.from) as HTMLElement | null;
+            const z = zoomOf(box);
+            if (first?.nodeType === 1) {
+              const c = first.cloneNode(true) as HTMLElement;
+              c.querySelectorAll('.hw-pagegap, .hw-handle').forEach((x) => x.remove());
+              c.style.margin = '0';
+              ghost.style.width = `${Math.min(520, first.getBoundingClientRect().width)}px`;
+              ghost.style.zoom = String(z);
+              ghost.append(c);
+            }
+            const n = dragging.end - dragging.start;
+            if (n > 1) {
+              const tag = document.createElement('span');
+              tag.className = 'hw-drag-count';
+              tag.textContent = `+ 아래 ${n - 1}개 함께`;
+              ghost.append(tag);
+            }
+            document.body.append(ghost);
+            moveGhost(e);
+            showLine(e.clientY);
+            if (!scrollRaf) scrollRaf = requestAnimationFrame(autoScroll);
+          };
+          const moveGhost = (e: PointerEvent) => {
+            if (!ghost) return;
+            ghost.style.transform = `translate(${e.clientX + 14}px, ${e.clientY - 12}px)`;
+          };
+          const endDrag = (drop: boolean) => {
+            const g = dragging;
             dragging = null;
+            press = null;
+            cancelAnimationFrame(scrollRaf);
+            scrollRaf = 0;
+            ghost?.remove();
+            ghost = null;
             if (line) line.style.display = 'none';
+            box.classList.remove('hw-dragging');
+            document.body.classList.remove('hw-dragging-body');
             setHighlight(view, null);
+            if (drop && g && dropAt >= 0) {
+              moveGroupTo(editor, g, dropAt);
+              view.focus(); // 바로 Ctrl+Z 로 되돌릴 수 있게
+            }
+            dropAt = -1;
+          };
+          grip.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0 || current < 0) return;
+            e.preventDefault(); // 글자 선택·커서 이동 막기
+            press = { x: e.clientX, y: e.clientY, id: e.pointerId };
+            grip.setPointerCapture(e.pointerId);
           });
+          grip.addEventListener('pointermove', (e) => {
+            if (!press || e.pointerId !== press.id) return;
+            lastY = e.clientY;
+            if (!dragging) {
+              if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < 4) return;
+              startDrag(e);
+              return;
+            }
+            moveGhost(e);
+            showLine(e.clientY);
+          });
+          grip.addEventListener('pointerup', (e) => {
+            if (!press || e.pointerId !== press.id) return;
+            if (dragging) return endDrag(true);
+            press = null;
+            if (current >= 0) opts.onMenu(groupAt(view.state.doc, current), grip); // 그냥 누름 = 메뉴
+          });
+          grip.addEventListener('pointercancel', () => endDrag(false));
+          grip.addEventListener('lostpointercapture', () => dragging && endDrag(true));
+          const escKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && dragging) {
+              e.preventDefault();
+              e.stopPropagation();
+              endDrag(false);
+            }
+          };
+          window.addEventListener('keydown', escKey, true);
           // 손잡이는 글 왼쪽 여백에 있어서, 글에서 손잡이로 가는 길(여백)에서도 사라지면 안 된다.
           // → 종이 전체에서 마우스를 보고, 글 영역 + 왼쪽 여백 64px 안이면 그 줄의 손잡이를 띄운다.
           //   밖으로 나가도 바로 지우지 않고 잠깐 기다린다 (손이 살짝 빗나가도 잡을 수 있게)
@@ -355,6 +426,7 @@ export const BlockHandles = Extension.create<BlockOptions>({
               }
             },
             destroy() {
+              window.removeEventListener('keydown', escKey, true);
               box.removeEventListener('mousemove', move);
               box.removeEventListener('mouseleave', leave);
               clearTimeout(hideTimer);
